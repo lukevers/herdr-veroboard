@@ -1,0 +1,14 @@
+{
+  "layout:veroboard": {
+    "cmd-f": "veroboard.search",
+    "cmd-1": "veroboard.all",
+    "cmd-2": "veroboard.space1",
+    "cmd-3": "veroboard.space2",
+    "cmd-4": "veroboard.space3",
+    "cmd-5": "veroboard.space4",
+    "cmd-6": "veroboard.space5",
+    "cmd-7": "veroboard.space6",
+    "cmd-8": "veroboard.space7",
+    "cmd-9": "veroboard.space8"
+  }
+}

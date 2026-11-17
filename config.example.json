@@ -1,0 +1,31 @@
+{
+  "//": "Your Herdr board rules. Every list here is ADDED to the package's defaults (~/.claude/veroboard/defaults.json); blocked.disable switches built-in rules off by id (ids: top of ~/.claude/veroboard/rules.js). Changes apply on each agent's next status-line run.",
+  "people": {
+    "//names": "Only these people count as someone an agent waits on ('Blocked · Luke'). Empty: any capitalized name does. Agents (t22) always count. Example: [\"Luke\", \"Sam\"]",
+    "names": [],
+    "//notPeople": "Tools, bots and models: 'waiting on Devin' is background work, not a person. Example: [\"Devin\", \"Jenkins\"]",
+    "notPeople": []
+  },
+  "blocked": {
+    "//asks": "Phrases near the end of an agent's message that mean it waits for you (Blocked · You). Example: [\"your thoughts\"]",
+    "asks": [],
+    "//notAsks": "Phrases that make a sentence not an ask. Example: [\"just FYI\"]",
+    "notAsks": [],
+    "//nothingForYou": "Phrases that say you have nothing to do: never Blocked · You. Example: [\"all quiet on your side\"]",
+    "nothingForYou": [],
+    "//todoLabels": "Line-start labels that hand you a to-do. Example: [\"action item\"] for 'Action item: rotate the key'",
+    "todoLabels": [],
+    "//patterns": "Advanced: JavaScript regular expressions (case-insensitive).",
+    "patterns": {
+      "asks": [],
+      "notAsks": []
+    },
+    "//disable": "Built-in rule ids to switch off. Example: [\"paste\", \"question\"]",
+    "disable": []
+  },
+  "board": {
+    "//": "How the board looks (Board settings → Display). Leave a setting out to use the package default: cables true, cablesThroughCards 5, contextRamp [50, 85], stuckMinutes 15, glow true, greyWhenSeen true, doneTimer true, activeRing true.",
+    "//card": "What each card shows and where (Board settings → Card). Easiest to set in the dialog. Shape: {\"lines\": [{\"left\": [], \"right\": []} ×3], \"hidden\": [], \"rows\": true}; badge ids: laneTime, why, launched, address, openedBy (hidden by default), folder, branch, model, effort, window, space, context.",
+    "//top": "The top bar (Board settings → Board). Shape: {\"lines\": [{\"left\": [], \"right\": []}], \"hidden\": []}; item ids: spaces, newSpace, count, pie, divider, gear (can't be hidden), filter."
+  }
+}

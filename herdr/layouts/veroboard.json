@@ -1,0 +1,119 @@
+{
+  "id": "root",
+  "type": "column",
+  "titlebar": "none",
+  "theme": "dusk",
+  "preview": "mods/veroboard/preview.svg",
+  "ui_font": "Geist",
+  "background": "canvas",
+  "terminal_padding": [
+    12,
+    10
+  ],
+  "gap": 0,
+  "resizable": false,
+  "children": [
+    {
+      "id": "board-header",
+      "type": "block",
+      "window_drag": true,
+      "content": {
+        "mod": "veroboard",
+        "props": {
+          "role": "header"
+        }
+      },
+      "size": {
+        "px": 52
+      }
+    },
+    {
+      "id": "board-body",
+      "type": "column",
+      "gap": 0,
+      "resizable": true,
+      "children": [
+        {
+          "id": "board-cards",
+          "type": "block",
+          "size": {
+            "px": 355
+          },
+          "border": {
+            "width": 1,
+            "color": "border"
+          },
+          "content": {
+            "mod": "veroboard"
+          },
+          "min": 140
+        },
+        {
+          "id": "workspace",
+          "type": "column",
+          "padding": [
+            10,
+            24
+          ],
+          "gap": 10,
+          "resizable": false,
+          "children": [
+            {
+              "id": "workspace-title",
+              "type": "block",
+              "size": {
+                "px": 34
+              },
+              "background": "surface",
+              "radius": 7,
+              "content": {
+                "mod": "veroboard",
+                "props": {
+                  "role": "terminals"
+                }
+              }
+            },
+            {
+              "id": "live-terminals",
+              "type": "block",
+              "background": "canvas",
+              "content": {
+                "tab": "active",
+                "pane": {
+                  "gap": 12,
+                  "radius": 7,
+                  "background": "background",
+                  "lone": true,
+                  "border": {
+                    "width": 1,
+                    "color": "border"
+                  },
+                  "focus": {
+                    "width": 1,
+                    "color": "ring"
+                  },
+                  "header": {
+                    "content": {
+                      "mod": "veroboard",
+                      "props": {
+                        "role": "pane"
+                      }
+                    },
+                    "height": 28,
+                    "position": "top",
+                    "reveal": "always"
+                  }
+                }
+              }
+            }
+          ],
+          "min": 200
+        }
+      ]
+    }
+  ],
+  "traffic_lights": [
+    16,
+    19
+  ]
+}

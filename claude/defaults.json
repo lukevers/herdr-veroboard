@@ -1,0 +1,113 @@
+{
+  "//": "Herdr board rules shipped with the package. Don't edit this file: put your own in ~/.config/veroboard/config.json (same shape). Its lists are ADDED to these; blocked.disable turns built-in rules off by id (ids: see rules.js).",
+  "people": {
+    "//names": "Only these people count as someone an agent waits on ('Blocked · Luke'). Empty: any capitalized name does. Agents (t22) always count.",
+    "names": [],
+    "//notPeople": "Tools and models: 'waiting on Codex' is background work (the board shows it as Waiting), not a person.",
+    "notPeople": [
+      "CI",
+      "Codex",
+      "Fable",
+      "Opus",
+      "Sonnet",
+      "Haiku",
+      "GitHub",
+      "Claude"
+    ]
+  },
+  "blocked": {
+    "//asks": "Phrases (whole words, any case) near the end of an agent's last message that mean it waits for YOU: Blocked · You.",
+    "asks": [],
+    "//notAsks": "Phrases that mark a sentence as not an ask: that sentence is ignored.",
+    "notAsks": [],
+    "//nothingForYou": "Phrases near the end that say you have nothing to do: never Blocked · You.",
+    "nothingForYou": [],
+    "//todoLabels": "Line-start labels that hand you a to-do ('Still yours: add the vault key'). 'still'/'also' in front work too.",
+    "todoLabels": [
+      "yours",
+      "for you",
+      "next for you",
+      "on you"
+    ],
+    "//patterns": "Advanced: regular expressions (JavaScript, case-insensitive) for asks and not-asks.",
+    "patterns": {
+      "asks": [],
+      "notAsks": []
+    },
+    "//disable": "Built-in rule ids to switch off, e.g. [\"paste\", \"question\"].",
+    "disable": []
+  },
+  "board": {
+    "//": "How the board looks and behaves (Board settings → Display). Theme colors come from your Herdr theme. Your config's \"board\" section overrides any of these.",
+    "cables": true,
+    "//cablesThroughCards": "How much the patch cables show through the cards, in % (0 to 50).",
+    "cablesThroughCards": 5,
+    "//contextRamp": "The context bar is plain below the first number, then turns from peach to red, fully red at the second (%).",
+    "contextRamp": [
+      50,
+      85
+    ],
+    "//stuckMinutes": "Background work with no news for this long shows its time in pink.",
+    "stuckMinutes": 15,
+    "glow": true,
+    "greyWhenSeen": true,
+    "doneTimer": true,
+    "activeRing": true,
+    "//card": "What each card shows and where (Board settings → Card): three lines, each with a left and right side; hidden badges; rows: the background work rows under a card.",
+    "card": {
+      "lines": [
+        {
+          "left": [],
+          "right": [
+            "laneTime",
+            "why",
+            "launched",
+            "address"
+          ]
+        },
+        {
+          "left": [
+            "folder"
+          ],
+          "right": [
+            "branch"
+          ]
+        },
+        {
+          "left": [
+            "model",
+            "effort",
+            "window"
+          ],
+          "right": [
+            "space",
+            "context"
+          ]
+        }
+      ],
+      "hidden": [
+        "openedBy"
+      ],
+      "rows": true
+    },
+    "//top": "The top bar (Board settings → Board): one line with a left and right side, and hidden items. The gear can't be hidden.",
+    "top": {
+      "lines": [
+        {
+          "left": [
+            "gear",
+            "filter",
+            "divider",
+            "spaces",
+            "newSpace"
+          ],
+          "right": [
+            "count",
+            "pie"
+          ]
+        }
+      ],
+      "hidden": []
+    }
+  }
+}
