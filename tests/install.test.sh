@@ -11,7 +11,7 @@ fail=0; check() { if eval "$2"; then echo "ok   $1"; else echo "FAIL $1"; fail=1
 out="$("$PKG/install.sh" 2>&1)"
 check "claude scripts installed" '[ -f "$HOME/.claude/veroboard/facts.js" ] && [ -x "$HOME/.claude/veroboard/tap.js" ] && [ -x "$HOME/.claude/veroboard/ping.sh" ]'
 check "rules file created" '[ -f "$HOME/.config/veroboard/config.json" ]'
-check "layout, mods, theme installed" '[ -f "$APP/layouts/veroboard.json" ] && [ -f "$APP/mods/veroboard/main.js" ] && [ -f "$APP/mods/veroboard-menu/main.js" ] && [ -f "$APP/mods/veroboard/card.js" ] && [ -f "$APP/mods/veroboard/topbar.js" ] && [ -f "$APP/mods/veroboard/cables.js" ] && [ -f "$APP/mods/veroboard/settings.js" ] && [ -f "$APP/themes/dusk.json" ]'
+check "layout and mods installed" '[ -f "$APP/layouts/veroboard.json" ] && [ -f "$APP/mods/veroboard/main.js" ] && [ -f "$APP/mods/veroboard-menu/main.js" ] && [ -f "$APP/mods/veroboard/card.js" ] && [ -f "$APP/mods/veroboard/topbar.js" ] && [ -f "$APP/mods/veroboard/cables.js" ] && [ -f "$APP/mods/veroboard/settings.js" ]'
 check "your keys kept" 'node -e "const k=require(\"$APP/keys.json\");process.exit(k.global[\"cmd-t\"]===\"tab.new\"&&k[\"layout:veroboard\"][\"cmd-f\"]===\"something.else\"&&k[\"layout:veroboard\"][\"cmd-9\"]===\"veroboard.space8\"?0:1)"'
 check "key conflict reported" 'grep -q "Kept your own binding for: cmd-f" <<<"$out"'
 check "keys.json backed up" 'ls "$APP"/keys.json.bak-* >/dev/null 2>&1'

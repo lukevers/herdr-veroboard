@@ -27,7 +27,7 @@ The script does five things:
 
 1. It copies the Claude Code scripts to `~/.claude/veroboard/`.
 2. It creates your rules file, `~/.config/veroboard/config.json`, but only if you don't have one.
-3. It copies the board layout, its two mods (`veroboard`, which also draws the settings dialog, and `veroboard-menu`) and the Dusk theme into
+3. It copies the board layout, its two mods (`veroboard`, which also draws the settings dialog, and `veroboard-menu`) into
    `~/.config/herdr-app/`.
 4. It adds the board's keys to `keys.json`. It never replaces a key you already use, and it backs up the file first.
 5. It prints the settings to add to Claude Code. It doesn't edit `~/.claude/settings.json` itself.
@@ -76,7 +76,7 @@ and prints its output.
 
 The **Board** tab of Board settings holds the patch-cable settings, with an example of what cables look like; everything about how a card looks is on the **Card**
 tab, under the card layout (Look, Context bar, Background work). Colors always come from your Herdr theme, so any
-theme works. The sliders step from tick to tick in whole units (1% or 1 minute); they never slide between them. Each setting is saved in the `"board"` section of your config; a setting at its default is left out of
+theme works. The screenshots use [Dusk](https://github.com/lukevers/herdr-dusk), a soft purple theme made to go with it. The sliders step from tick to tick in whole units (1% or 1 minute); they never slide between them. Each setting is saved in the `"board"` section of your config; a setting at its default is left out of
 the file. The board reloads within a second or two.
 
 | Setting | Default | What it does |

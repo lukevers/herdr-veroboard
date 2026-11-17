@@ -2,7 +2,6 @@
   "id": "root",
   "type": "column",
   "titlebar": "none",
-  "theme": "dusk",
   "preview": "mods/veroboard/preview.svg",
   "ui_font": "Geist",
   "background": "canvas",

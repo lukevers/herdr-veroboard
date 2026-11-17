@@ -26,7 +26,7 @@ command -v node >/dev/null 2>&1 || { echo "Node.js is required (node not found).
 [ -d "$APP" ] || { echo "Herdr's home ($APP) not found. Install and open the Herdr app first." >&2; exit 1; }
 
 # The Herdr files: package path → installed path (relative to herdr/ and $APP).
-ITEMS=(layouts/veroboard.json mods/veroboard mods/veroboard-menu themes/dusk.json)
+ITEMS=(layouts/veroboard.json mods/veroboard mods/veroboard-menu)
 differs() { [ -e "$APP/$1" ] && ! diff -rq "herdr/$1" "$APP/$1" >/dev/null 2>&1; }
 conflicts=()
 for it in "${ITEMS[@]}"; do differs "$it" && conflicts+=("$it"); done
