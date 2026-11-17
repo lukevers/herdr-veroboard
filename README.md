@@ -8,7 +8,7 @@ long each card has been in its lane. A filter box (⌘F) narrows the board by an
 lane, why it's blocked; several words must all match), and the gear next to it
 opens **Board settings**: how the board looks, what puts a card in Blocked, and a box to test a message.
 
-![Veroboard](herdr/mods/veroboard/preview.svg)
+![Veroboard](preview.png)
 
 ## What you need
 
