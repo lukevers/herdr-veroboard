@@ -28,6 +28,11 @@ const STATES = [
 // A Blocked card waiting on another agent or a person (not you): a warm marigold between Dusk's gold and the Working amber (#f5a855).
 const ELSEWHERE = "#f2bc78";
 const stateColor = (t, key) => key === "waiting" ? WAITING : t[key];
+// Notifications and spaces (the same in mods/veroboard-toast). A notification about an agent belongs to that agent's
+// space (enrichNotices saves it; older ones only have the space's name). Herdr's others belong to no space, so every
+// space shows them. `sp`: a space ({id, name}), or null for all.
+const noticeIn = (n, sp) => !sp || !n.agent || (n.agent.spaceId ? n.agent.spaceId === sp.id : !n.agent.space || n.agent.space === sp.name);
+const noticeUnread = (n) => !n.read && !n.seen && n.at > (Number(shared("veroboard.noticesSeen")) || 0);
 // Background work that runs this long with no news may be stuck, so its time turns pink. Sub-agents and
 // shells that wait: time since they started. Monitors: time since their last event (or their start).
 // (VIEW.stuckMinutes, 15 by default: stuckMs())
@@ -540,7 +545,7 @@ export default class Board extends View {
       const pane = panes().find((p) => p.pane === a.pane);
       const r = this.blockReason(a), lane = this.column(a), up = this.parentOf(addr);
       return {
-        address: addr, name: a.tab_name || addr, space: a.space_name || "",
+        address: addr, name: a.tab_name || addr, space: a.space_name || "", spaceId: a.space || "",
         why: r ? { label: r.label, color: r.color } : { label: STATES.find((x) => x.key === lane)?.label ?? "", color: stateColor(t, lane) },
         branch: pane?.branch ? { name: pane.branch, worktree: Boolean(this.sessions?.[addr]?.worktree) } : null,
         parent: up ? { address: up, name: agents().find((x) => x.address === up)?.tab_name ?? "" } : null,
@@ -567,18 +572,20 @@ export default class Board extends View {
       .rounded(4).bg(bg).text_size(10.5).text_color(fg).when(mono, (el) => el.font_family("JetBrains Mono"))
       .when(shrink, (el) => el.flex_shrink(1).min_w(0)).when(!shrink, (el) => el.flex_none())
       .when(Boolean(icon), (el) => el.child(svg(icon).size(10).flex_none())).child(div().min_w(0).truncate().child(text));
-    const ago = (ms) => ms < 60000 ? "now" : ms < 3600000 ? `${Math.floor(ms / 60000)}m` : `${Math.floor(ms / 3600000)}h`;
     const body = (n) => {
       const g = n.agent;
-      if (!g?.name) return v_flex().flex_1().min_w(0).gap(2)
-        .child(div().truncate().font_semibold().text_size(13).text_color(t.foreground).child(n.title))
-        .when(Boolean(n.body), (el) => el.child(div().truncate().text_size(12).text_color(t.muted).child(n.body)));
+      // One frame for every notice (user, 2026-11-18): an 18px first line and a 16px second line, the second there even
+      // when it has nothing in it, so every notice is the same height (the box's h(60) holds it too).
+      if (!g?.name) return v_flex().flex_1().min_w(0).gap(6)
+        .child(div().h(18).flex_none().truncate().font_semibold().text_size(13).text_color(t.foreground).child(n.title))
+        .child(div().h(16).flex_none().truncate().text_size(12).text_color(t.muted).child(n.body ?? ""));
       return v_flex().flex_1().min_w(0).gap(6)
-        .child(h_flex().gap(6).items_center()
+        .child(h_flex().h(18).flex_none().gap(6).items_center()
           .child(div().flex_1().min_w(0).truncate().font_semibold().text_size(13).text_color(t.foreground).child(g.name))
-          .when(Boolean(g.why?.label), (el) => el.child(pill(`${g.why.label} ${ago(now - n.at)}`, g.why.color, alpha(g.why.color, "26"))))
+          // No age: a notice on the board is always "now" (user, 2026-11-18). The bell's list keeps it.
+          .when(Boolean(g.why?.label), (el) => el.child(pill(g.why.label, g.why.color, alpha(g.why.color, "26"))))
           .child(pill(g.address, t.muted, t.raised, true)))
-        .child(h_flex().gap(5).items_center().overflow_hidden()
+        .child(h_flex().h(16).flex_none().gap(5).items_center().overflow_hidden()
           .when(Boolean(g.space), (el) => el.child(pill(g.space, t.muted)))
           // As on the card: a branch in a linked worktree is blue with the layers icon.
           .when(Boolean(g.branch), (el) => el.child(g.branch.worktree
@@ -586,20 +593,26 @@ export default class Board extends View {
             : pill(g.branch.name, t.muted, t.raised, false, "mods/workspace-chrome/git-branch.svg", true)))
           .when(Boolean(g.parent), (el) => el.child(pill(`${g.parent.name || g.parent.address} · ${g.parent.address}`, t.muted, t.raised, false, "mods/veroboard/launched-by.svg"))));
     };
-    // The stripe is the notice's own left edge, as on a card (absolute, clipped by the rounded corners), not a bar
-    // inside the padding (that read as a blockquote; user, 2026-11-18).
-    return v_flex().absolute().top(8).right(24).w(340).gap(8).children(list.map((n) => h_flex().id(`notice-${n.id}`)
-      .relative().overflow_hidden()
-      .px(14).py(10).gap(11).items_center().rounded(10).bg(t.popover).border(1).border_color(alpha(t.accent, "55")).shadow_lg()
-      .cursor_pointer().hover((s) => s.bg(t.hover))
-      .on_click(() => { if (n.action?.name) run(n.action.name, n.action.args ?? {}); drop(n.id); })
-      .when(!n.agent?.name, (el) => el.child(n.icon ? image(n.icon).w(16).h(16).flex_none() : div().size(8).rounded(4).flex_none().bg(t[DOT[n.level] ?? "accent"] ?? t.accent)))
-      .when(Boolean(n.agent?.name), (el) => el.child(div().absolute().left(0).top(0).bottom(0).w(3).bg(n.agent.why?.color ?? t.accent)))
-      .child(body(n))
-      .child(div().id(`notice-x-${n.id}`).flex_none().px(5).rounded(4).text_size(13).text_color(t.dim).cursor_pointer()
-        .hover((s) => s.text_color(t.foreground).bg(t.raised))
-        .on_mouse_down("left", (_e, cx) => cx.stop_propagation())
-        .on_click((_e, cx) => { cx.stop_propagation(); drop(n.id); }).child("×"))));
+    // The colored left edge follows the notice's rounded corners, like a CSS border-left on a rounded box (a square
+    // stripe looked odd on a toast; user, 2026-11-18): the box is filled with the why's color, and the content sits 3px
+    // in from the left on the popup's color, its own left corners rounded, so the color shows as a curved edge.
+    return v_flex().absolute().top(8).right(24).w(340).gap(8).children(list.map((n) => {
+      const edge = n.agent?.name ? (n.agent.why?.color ?? t.accent) : null;
+      // The light border sits on the popup's color (it's see-through; on the edge's color it tinted the whole outline),
+      // so the colored layer is inside it.
+      return h_flex().id(`notice-${n.id}`).rounded(10).border(1).border_color(alpha(t.accent, "55")).shadow_lg().overflow_hidden()
+        .bg(t.popover).child(h_flex().flex_1().min_w(0).rounded(9).bg(edge ?? t.popover).when(Boolean(edge), (el) => el.pl(3))
+        .child(h_flex().id(`notice-in-${n.id}`).flex_1().min_w(0).h(60).px(edge ? 11 : 14).gap(11).items_center()
+          .bg(t.popover).when(Boolean(edge), (el) => el.rounded_l(6))
+          .cursor_pointer().hover((s) => s.bg(t.hover))
+          .on_click(() => { if (n.action?.name) run(n.action.name, n.action.args ?? {}); drop(n.id); })
+          .when(!edge, (el) => el.child(n.icon ? image(n.icon).w(16).h(16).flex_none() : div().size(8).rounded(4).flex_none().bg(t[DOT[n.level] ?? "accent"] ?? t.accent)))
+          .child(body(n))
+          .child(div().id(`notice-x-${n.id}`).flex_none().px(5).rounded(4).text_size(13).text_color(t.dim).cursor_pointer()
+            .hover((s) => s.text_color(t.foreground).bg(t.raised))
+            .on_mouse_down("left", (_e, cx) => cx.stop_propagation())
+            .on_click((_e, cx) => { cx.stop_propagation(); drop(n.id); }).child("×"))));
+    }));
   }
   groupFamilies(cards) {
     const at = new Map(cards.map((a, i) => [a.address, i]));
@@ -716,28 +729,36 @@ export default class Board extends View {
       divider: dividerLine(t),
       // Veroboard settings (settings.js, opened as this mod's dialog; user, 2026-11-17).
       gear: gearButton(t).on_click(() => run("mod.open", { name: "veroboard" })),
-      // The notification list (mods/veroboard-toast, opened as a popup at the pointer). Opening it marks all as seen.
-      // Unread: newer than your last look at the list, and not clicked or dismissed on the board. The list gets the
-      // previous look's time, so what's new this time stays bright while it's open (the rest is dimmed).
+      // The notification list (mods/veroboard-toast, opened as a popup at the pointer). It follows the board's space
+      // (user, 2026-11-18): with one space selected, the bell counts and the list shows that space's notifications
+      // (and Herdr's own, which belong to no space); with All Spaces, all of them. The list has chips to pick another.
+      // Unread: not yet shown in the list, and not clicked or dismissed on the board. Opening the list marks the ones
+      // it shows as seen ("seen"); it gets their ids, so they stay bright while it's open (the rest is dimmed).
+      // Before per-notice "seen", one time marked them all: "veroboard.noticesSeen", still read for older entries.
       // The list opens 8px below the bell, its left edge on the bell's left edge when the bell is on the bar's left
       // side, its right edge on the bell's right edge on the right side (user, 2026-11-18). The press records where
       // the bell is; without that (not painted yet) the popup opens at the pointer.
       bell: bellButton(t, (Array.isArray(shared("veroboard.noticeLog")) ? shared("veroboard.noticeLog") : [])
-        .filter((n) => n && !n.read && n.at > (Number(shared("veroboard.noticesSeen")) || 0)).length)
+        .filter((n) => n && noticeUnread(n) && noticeIn(n, scope === "space" ? active : null)).length)
         .on_mouse_down("left", (e) => { this.bellBounds = e.bounds ?? null; })
         .on_click(() => {
-          const seenBefore = Number(shared("veroboard.noticesSeen")) || 0;
-          setShared("veroboard.noticesSeen", Date.now());
-          // Exactly the list's size: a 40px header, 4 to 7 rows of 62px (+10 for the edge between new and read), a 1px
-          // border round it. Keep in step with mods/veroboard-toast (ROW_H, LIST_MIN, LIST_MAX, EDGE_H).
-          const log = (Array.isArray(shared("veroboard.noticeLog")) ? shared("veroboard.noticeLog") : []).filter(Boolean);
-          const read = log.filter((n) => n.read || n.at <= seenBefore).length;
-          const edge = read > 0 && read < log.length ? 10 : 0;
-          const height = 40 + Math.max(4 * 62, Math.min(7 * 62, log.length * 62 + edge)) + 2;
+          const sp = scope === "space" && active ? active : null;
+          const all = (Array.isArray(shared("veroboard.noticeLog")) ? shared("veroboard.noticeLog") : []).filter(Boolean);
+          const shown = all.filter((n) => noticeIn(n, sp));
+          const fresh = shown.filter(noticeUnread).map((n) => n.id);
+          if (fresh.length) setShared("veroboard.noticeLog", all.map((n) => (fresh.includes(n.id) ? { ...n, seen: true } : n)));
+          // Exactly the popup's size: a 40px header, a 34px row of space chips (with more than one space), 4 to 7 rows
+          // of 62px (+10 for the edge between new and read), a 1px border round it. The list keeps that height when you
+          // pick another space; it scrolls. Keep in step with mods/veroboard-toast (ROW_H, LIST_MIN, LIST_MAX, EDGE_H).
+          const edge = fresh.length > 0 && fresh.length < shown.length ? 10 : 0;
+          const listH = Math.max(4 * 62, Math.min(7 * 62, shown.length * 62 + edge));
+          const bar = allSpaces.length > 1;
+          const height = 40 + (bar ? 34 : 0) + listH + 2;
           const b = this.bellBounds;
           const onLeft = (VIEW.top?.lines ?? []).some((l) => l.left.includes("bell"));
           const at = b ? { x: Math.max(0, onLeft ? b.x : b.x + b.width - 380), y: b.y + b.height + 8 } : undefined;
-          openOverlay({ mod: "veroboard-toast", kind: "popup", width: 380, height, ...(at ? { at } : {}), props: { view: "history", seenBefore } });
+          openOverlay({ mod: "veroboard-toast", kind: "popup", width: 380, height, ...(at ? { at } : {}),
+            props: { view: "history", fresh, space: sp?.id ?? null, listH, bar, seenBefore: Number(shared("veroboard.noticesSeen")) || 0 } });
         }),
       filter: h_flex().id("board-search").w(100).h(27).flex_none().px(9).gap(6).items_center().rounded(6)
         .tooltip("Matches anything on a card: name, id, model, effort, space, folder, branch, lane, why it's blocked, background work. Several words must all match.")

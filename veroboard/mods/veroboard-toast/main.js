@@ -6,7 +6,7 @@
 //  2. Opened from the top bar's bell (props.view "history"): the history, newest first.
 import { View, div, svg, image, PathBuilder } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
-import { props, closeOverlay, shared, setShared, theme, run } from "herdr";
+import { props, closeOverlay, shared, setShared, theme, run, spaces } from "herdr";
 
 const NOTICES = "veroboard.notices"; // showing on the board now
 const LOG = "veroboard.noticeLog"; // the history, oldest first, the last 50
@@ -36,6 +36,8 @@ const pill = (t, text, fg, bg = t.raised, mono = false, icon = null, shrink = fa
   .rounded(4).bg(bg).text_size(10.5).text_color(fg).when(mono, (el) => el.font_family("JetBrains Mono"))
   .when(shrink, (el) => el.flex_shrink(1).min_w(0)).when(!shrink, (el) => el.flex_none())
   .when(Boolean(icon), (el) => el.child(svg(icon).size(10).flex_none())).child(div().min_w(0).truncate().child(text));
+// Which space a notification belongs to: as noticeIn in mods/veroboard/main.js (keep the two in step).
+const noticeIn = (n, sp) => !sp || !n.agent || (n.agent.spaceId ? n.agent.spaceId === sp.id : !n.agent.space || n.agent.space === sp.name);
 const ago = (ms) => ms < 60000 ? "now" : ms < 3600000 ? `${Math.floor(ms / 60000)}m` : ms < 86400000 ? `${Math.floor(ms / 3600000)}h` : `${Math.floor(ms / 86400000)}d`;
 
 export default class VeroboardToast extends View {
@@ -61,11 +63,35 @@ export default class VeroboardToast extends View {
     if (p.view !== "history") return div();
     const t = theme();
     const now = Date.now();
-    const log = list(LOG).slice().reverse();
-    // Read: there at your last look at this list, or clicked or dismissed on the board. Read rows are dimmed.
+    // Which space's notifications: the board's space when the bell opened this (null: all), then the chip you pick.
+    const all = spaces();
+    if (this.space === undefined) this.space = p.space ?? null;
+    if (this.space && !all.some((s) => s.id === this.space)) this.space = null;
+    const sp = all.find((s) => s.id === this.space) ?? null;
+    const whole = list(LOG).slice().reverse();
+    const log = whole.filter((n) => noticeIn(n, sp));
+    // New: unseen when the bell opened this (or when you picked a space here), or arrived since. They stay bright
+    // while it's open. Read: seen before, clicked or dismissed on the board. Read rows are dimmed.
+    this.fresh ??= new Set(Array.isArray(p.fresh) ? p.fresh : []);
     const seenBefore = Number(p.seenBefore) || 0;
-    const isRead = (n) => Boolean(n.read) || n.at <= seenBefore;
+    const isRead = (n) => Boolean(n.read) || (n.seen ? !this.fresh.has(n.id) : n.at <= seenBefore);
     const fresh = log.filter((n) => !isRead(n)), read = log.filter(isRead);
+    // Picking a space shows its notifications, so the unseen ones there count as seen now (and stay bright).
+    const pick = (id, cx) => {
+      this.space = id;
+      const s = all.find((x) => x.id === id) ?? null;
+      const now2 = list(LOG), ids = now2.filter((n) => !n.read && !n.seen && n.at > seenBefore && noticeIn(n, s)).map((n) => n.id);
+      if (ids.length) { ids.forEach((i) => this.fresh.add(i)); setShared(LOG, now2.map((n) => (ids.includes(n.id) ? { ...n, seen: true } : n))); }
+      cx?.notify?.();
+    };
+    const count = (s) => whole.filter((n) => noticeIn(n, s)).length;
+    // A chip as the top bar's space chips: the selected one raised, with the light accent border.
+    const chip = (id, label, n) => h_flex().id(`log-sp-${id ?? "all"}`).flex_none().h(22).px(8).gap(5).items_center().rounded(6)
+      .border(1).border_color(this.space === id ? alpha(t.accent, "55") : "#00000000")
+      .when(this.space === id, (el) => el.bg(t.raised)).text_size(11.5)
+      .text_color(this.space === id ? t.foreground : t.muted).cursor_pointer().hover((s) => s.text_color(t.foreground))
+      .on_click((_e, cx) => pick(id, cx))
+      .child(label).when(n > 0, (el) => el.child(div().text_size(10.5).text_color(t.dim).child(String(n))));
     const dark = mix(t.popover, t.canvas ?? "#000000", 0.75);
     // The last new row has no bottom line: the sawtooth is its edge.
     const row = (n) => h_flex().id(`log-${n.id}`).relative().h(ROW_H).flex_none().px(14).gap(11).items_center()
@@ -77,9 +103,10 @@ export default class VeroboardToast extends View {
       }))
       .when(!n.agent?.name, (el) => el
         .child(n.icon ? image(n.icon).w(16).h(16).flex_none() : div().size(8).rounded(4).flex_none().bg(t[DOT[n.level] ?? "accent"] ?? t.accent))
-        .child(v_flex().flex_1().min_w(0).gap(2)
-          .child(div().truncate().font_semibold().text_size(12.5).text_color(t.foreground).child(n.title))
-          .when(Boolean(n.body), (el) => el.child(div().truncate().text_size(11.5).text_color(t.muted).child(n.body))))
+        // The same frame as an agent's row (user, 2026-11-18): an 18px line and a 16px line, the second even when empty.
+        .child(v_flex().flex_1().min_w(0).gap(6)
+          .child(div().h(18).flex_none().truncate().font_semibold().text_size(12.5).text_color(t.foreground).child(n.title))
+          .child(div().h(16).flex_none().truncate().text_size(11.5).text_color(t.muted).child(n.body ?? "")))
         .child(div().flex_none().text_size(11).text_color(t.dim).child(ago(now - n.at))))
       // About an agent (the board saved its card facts on arrival): a slim card, as on the board's notices
       // (user, 2026-11-18): a stripe in the why's color; name, why + age, id; then space, branch, who opened it.
@@ -87,12 +114,14 @@ export default class VeroboardToast extends View {
         // The stripe is the row's own left edge, as on a card, not a bar inside the padding (user, 2026-11-18).
         .child(div().absolute().left(0).top(0).bottom(0).w(3).bg(n.agent.why?.color ?? t.accent))
         .child(v_flex().flex_1().min_w(0).gap(6)
-          .child(h_flex().gap(6).items_center()
+          .child(h_flex().h(18).flex_none().gap(6).items_center()
             .child(div().flex_1().min_w(0).truncate().font_semibold().text_size(12.5).text_color(t.foreground).child(n.agent.name))
             .when(Boolean(n.agent.why?.label), (el) => el.child(pill(t, `${n.agent.why.label} ${ago(now - n.at)}`, n.agent.why.color, alpha(n.agent.why.color, "26"))))
             .child(pill(t, n.agent.address, t.muted, t.raised, true)))
-          .child(h_flex().gap(5).items_center().overflow_hidden()
-            .when(Boolean(n.agent.space), (el) => el.child(pill(t, n.agent.space, t.muted)))
+          // Always there, empty or not (one space shown and no branch or parent), so every row is laid out alike.
+          .child(h_flex().h(16).flex_none().gap(5).items_center().overflow_hidden()
+            // Its space, hidden when the list shows one space only (as on the cards).
+            .when(Boolean(n.agent.space) && !sp, (el) => el.child(pill(t, n.agent.space, t.muted)))
             // As on the card: a branch in a linked worktree is blue with the layers icon.
             .when(Boolean(n.agent.branch), (el) => el.child(n.agent.branch.worktree
               ? pill(t, n.agent.branch.name, t.ansi4, alpha(t.ansi4, "26"), false, "mods/workspace-chrome/layers.svg", true)
@@ -105,16 +134,27 @@ export default class VeroboardToast extends View {
         .child(div().flex_1().text_size(12.5).font_semibold().text_color(t.foreground).child("Notifications"))
         .when(log.length > 0, (el) => el.child(div().id("log-clear").px(7).py(3).rounded(5).text_size(11.5).text_color(t.muted)
           .cursor_pointer().hover((s) => s.bg(t.hover).text_color(t.foreground))
-          .on_click(() => { setShared(LOG, []); setShared(NOTICES, []); }).child("Clear"))))
+          // Clears what's shown: this space's (and Herdr's own), or all of them.
+          .on_click(() => {
+            const keep = (n) => !noticeIn(n, sp);
+            setShared(LOG, list(LOG).filter(keep)); setShared(NOTICES, list(NOTICES).filter(keep));
+          }).child("Clear"))))
+      // The spaces, when there's more than one (the bell sized the popup for this row: p.bar).
+      .when(Boolean(p.bar) && all.length > 1, (el) => el.child(h_flex().id("log-spaces").flex_none().h(34).px(10).gap(4).items_center()
+        .border_b(1).border_color(t.border).overflow_x_scroll()
+        .child(chip(null, "All", whole.length))
+        .children(all.map((s) => chip(s.id, s.name, count(s))))))
       .child(log.length
         // New on top on the popup's own color; then a sawtooth edge and the read ones on a darker color, dimmed (user,
         // 2026-11-18). All read: the whole list is the darker part; none read: no edge.
-        ? v_flex().id("log-list").h(Math.max(LIST_MIN, Math.min(LIST_MAX, log.length * ROW_H + (fresh.length && read.length ? EDGE_H : 0)))).overflow_y_scrollbar()
+        // The height the bell sized the popup for; it stays when you pick another space (the list scrolls).
+        ? v_flex().id("log-list").h(Number(p.listH) || Math.max(LIST_MIN, Math.min(LIST_MAX, log.length * ROW_H + (fresh.length && read.length ? EDGE_H : 0)))).overflow_y_scrollbar()
           .children(fresh.map(row))
           .when(fresh.length > 0 && read.length > 0, (el) => el.child(sawtooth(dark)))
           // The read part runs to the bottom, so a short list doesn't end in a lighter strip.
           .when(read.length > 0, (el) => el.child(v_flex().flex_grow(1).flex_shrink_0().bg(dark).children(read.map(row))))
-        : div().h(LIST_MIN).p(18).text_size(12).text_color(t.muted)
-          .child("Nothing yet. What Herdr tells you lands here, newest first: an agent needs you or finished, a command failed."));
+        : div().h(Number(p.listH) || LIST_MIN).p(18).text_size(12).text_color(t.muted)
+          .child(sp && whole.length ? `Nothing in ${sp.name} yet. Pick All for the other spaces.`
+            : "Nothing yet. What Herdr tells you lands here, newest first: an agent needs you or finished, a command failed."));
   }
 }

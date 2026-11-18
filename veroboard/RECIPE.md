@@ -66,9 +66,12 @@ Top to bottom:
   most 3; a click runs its action, × dismisses, it times out) and `veroboard.noticeLog` (the last 50), then closes
   Herdr's toast. A notification about an agent (Herdr's carry `agent.focus {terminal}`) gets that agent's card facts
   saved on it by the board within a second (name, why it's in its lane, id, space, branch, who opened it) and shows as a
-  slim card: a stripe in the why's color, name, why + age, id; then space, branch, parent. Opened from the bell with `props.view: "history"`, it lists the log newest first (at least four rows tall): new ones on the popup's color,
-  then a sawtooth edge and the read ones (there at your last look, or clicked or dismissed on the board) darker and
-  dimmed.
+  slim card: a colored left edge in the why's color (rounded with the toast's corners), name, why, id; then space,
+  branch, parent. Opened from the bell with `props.view: "history"`, it lists the log newest first (at least four rows
+  tall, each with its age): new ones on the popup's color, then a sawtooth edge and the read ones (seen in an earlier
+  look, or clicked or dismissed on the board) darker and dimmed. The bell and the list follow the board's space: one
+  space selected shows that space's notifications (plus Herdr's own, which belong to no space); All Spaces shows all.
+  Chips under the list's header pick another space.
 - **Shipped mods used:** `menu` (tab right-click), `new-menu` (the + button). Icons from `workspace-chrome` and `icons/`.
 - **Herdr:** `agents`, `spaces`, `panes`, `terminals`, `shared`/`setShared` (keys `veroboard.*`), `keys`, `nextCommand`,
   `openOverlay`, `setAgentOrder`, `readTextFile`, `writeTextFile`, `watchFolder`, `exec`; commands `agent.focus`,
