@@ -13,11 +13,11 @@
 // instead). Agents pick it up on their next status-line run. The Test tab runs ~/.config/veroboard/core/classify.js,
 // so it always uses the saved rules.
 
-import { div, svg } from "gpui-kit";
+import { div, svg, PathBuilder } from "gpui-kit";
 import { v_flex, h_flex, InputState, Input, TextareaState, Textarea, SliderState, Slider, SliderTrack, SliderIndicator, SliderThumb } from "gpui-base";
 import { theme, exec, home, readTextFile, writeTextFile, props, closeOverlay, agents, spaces } from "herdr";
 import { CARD_ITEMS, cardLayout, renderCard, TOP_ITEMS, topLayout, badge } from "./card.js";
-import { cablePalette, cableLayers } from "./cables.js";
+import { cablePalette, cableLayers, cableDash, paintAt } from "./cables.js";
 import { hint, pie, chip, newSpaceButton, gearButton, dividerLine, renderTopBar } from "./topbar.js";
 
 const ELSEWHERE = "#f2bc78"; // the board's marigold: waits on another agent or a person
@@ -459,7 +459,23 @@ export class SettingsPanel {
           .child(card(0, 112, { address: "t32", name: "update-docs", color: t.working, laneTime: { text: "1m", color: t.working }, openedBy: "t22", folder: "myapp", context: { pct: 9 } }))
           .child(card(1, 96, { address: "t27", name: "api-tests", color: "#91c7e3", laneTime: { text: "5m", color: "#91c7e3" }, folder: "api", model: "Sonnet 5", effort: "high", context: { pct: 27 } }))
           .child(card(2, 40, { address: "t31", name: "fix-login", color: t.done, laneTime: { text: "3m", color: t.done }, openedBy: "t22", folder: "myapp-login", context: { pct: 18 } }))
-          .child(div().absolute().inset_0().children(cables.flatMap((c) => c.jacks)))));
+          .child(div().absolute().inset_0().children(cables.flatMap((c) => c.jacks)))))
+      .when(on, (d) => d.child(this.cableLegend(t)));
+  }
+
+  // Which line a cable gets: its parent's generation (user, 2026-11-18). Drawn with the board's own dash patterns.
+  cableLegend(t) {
+    const palette = cablePalette(t);
+    const sample = (gen) => {
+      const dash = cableDash(gen);
+      const pen = dash ? PathBuilder.stroke(2.5).dash_array(dash) : PathBuilder.stroke(2.5);
+      return div().relative().w(44).h(10).flex_none().child(paintAt(pen.move_to(2, 5).line_to(42, 5).build(), palette[gen - 1] ?? t.accent));
+    };
+    const item = (gen, text) => h_flex().gap(8).items_center().child(sample(gen)).child(div().text_size(11.5).text_color(t.muted).child(text));
+    return h_flex().gap(22).flex_wrap()
+      .child(item(1, "Opened by a top-level agent"))
+      .child(item(2, "Opened by its child"))
+      .child(item(3, "Deeper"));
   }
 
   // The top bar's example: the same pieces as the board's bar, with your spaces and agent count, made inert.

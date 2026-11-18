@@ -235,8 +235,9 @@ export default class Board extends View {
     // A monitor past its expiry is gone even before the status line next runs.
     const monitorList = (session?.monitorList ?? []).filter(m => !Number.isFinite(m.expiresAt) || m.expiresAt > Date.now());
     // Agents in their own tabs that another agent opened (herdr-app do tab.new …), from ~/.config/veroboard/adapters/claude/facts.js:
-    // the opener's card counts the ones still live.
-    const live = addr => terminals().some(x => x.address === addr && x.state === "live");
+    // the opener's card counts the ones still live that are agents, the same ones its cables go to (a plain shell it
+    // opened isn't counted: the badge said 3 next to 2 cables, user 2026-11-18).
+    const live = addr => terminals().some(x => x.address === addr && x.state === "live") && agents().some(x => x.address === addr);
     // Herdr's own facts: the pane's git branch and folder, and since when its tab has been working.
     const pane = panes().find(p => p.pane === a.pane);
     const since = a.status === "working" ? spaces().flatMap(s => s.tabs).find(tb => tb.id === a.tab)?.working_since : null;
@@ -411,13 +412,18 @@ export default class Board extends View {
       const offs = mine.map((_, k) => (k % 2 ? -1 : 1) * Math.ceil(k / 2) * s).sort((x, y) => x - y);
       mine.forEach((addr, k) => { slot[addr] = offs[k]; });
     }
+    // A parent's generation among the cards on the board: 1 when its own opener isn't on it (see cableDash).
+    const gen = (addr, seen = new Set()) => { const up = this.parentOf(addr); return pos[up] && !seen.has(up) ? 1 + gen(up, seen.add(addr)) : 1; };
     for (const [par, list] of Object.entries(kids)) for (const [k, addr] of list.entries()) {
       const p = pos[par], c = pos[addr];
-      const color = palette[k % palette.length] ?? t.accent;
+      // Each generation starts one color further along (user, 2026-11-18), so a chain of only children goes pink, green,
+      // blue instead of all pink; siblings still step through the palette from there.
+      const g = gen(par);
+      const color = palette[(k + g - 1) % palette.length] ?? t.accent;
       const [outP, outC] = sides(p, addr);
       const a = { x: outP > 0 ? p.right : p.left, y: p.y + (slot[addr] ?? 0) }, b = { x: outC > 0 ? c.right : c.left, y: c.y };
       // A jack only on a card in view: one scrolled out of its lane would float over the header or the board's edge.
-      const c2 = cableLayers(t, a, b, outP, outC, color, H, W, (j) => j.y >= 53 && j.y <= H - 6);
+      const c2 = cableLayers(t, a, b, outP, outC, color, H, W, (j) => j.y >= 53 && j.y <= H - 6, g);
       shadows.push(...c2.shadows); bodies.push(...c2.bodies); jacks.push(...c2.jacks);
     }
     // `back` goes under the lanes (cards hide the cable), `front` over them: the plugs stay visible on the card edges.
