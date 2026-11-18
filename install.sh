@@ -1,24 +1,27 @@
 #!/usr/bin/env bash
-# Installs Veroboard: its layout and mods into ~/.config/herdr-app, its Claude Code scripts into
-# ~/.claude/veroboard, a personal rules file at ~/.config/veroboard/config.json (kept if it exists), and the
+# Installs Veroboard: its layout and mods into ~/.config/herdr-app, its agent scripts into
+# ~/.config/veroboard/{core,adapters}, a personal rules file at ~/.config/veroboard/config.json (kept if it exists), and the
 # board's keys into keys.json (added, never replacing yours). It does not edit ~/.claude/settings.json: it prints
 # what to add. Conflicts are checked first, so a refused install changes nothing.
 #   ./install.sh           install; stop if a board file of yours differs
 #   ./install.sh --force   install; move differing files aside as <name>.bak-<time> first
+#   ./install.sh --codex   install; also add Codex CLI hooks to ~/.codex/hooks.json
 set -euo pipefail
 cd "$(dirname "$0")"
 PKG="$(pwd)"
 FORCE=0
+CODEX=0
 for arg in "$@"; do
   case "$arg" in
     --force) FORCE=1 ;;
-    -h|--help) sed -n '2,8p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    --codex) CODEX=1 ;;
+    -h|--help) sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "Unknown option: $arg (try --help)" >&2; exit 2 ;;
   esac
 done
 
 APP="$HOME/.config/herdr-app"
-CLAUDE="$HOME/.claude/veroboard"
+VB="$HOME/.config/veroboard"
 CONF_DIR="$HOME/.config/veroboard"
 STAMP="$(date +%Y%m%d-%H%M%S)"
 
@@ -27,7 +30,8 @@ command -v node >/dev/null 2>&1 || { echo "Node.js is required (node not found).
 
 # The Herdr files: package path → installed path (relative to veroboard/ and $APP).
 ITEMS=(layouts/veroboard.json mods/veroboard mods/veroboard-menu)
-differs() { [ -e "$APP/$1" ] && ! diff -rq "veroboard/$1" "$APP/$1" >/dev/null 2>&1; }
+# Files only on your side (Herdr adds gpui-kit.d.ts and jsconfig.json to mod folders) don't count.
+differs() { [ -e "$APP/$1" ] || return 1; local out; out="$(diff -rq "veroboard/$1" "$APP/$1" 2>&1 | grep -v "^Only in $APP/" || true)"; [ -n "$out" ]; }
 conflicts=()
 for it in "${ITEMS[@]}"; do differs "$it" && conflicts+=("$it"); done
 if [ ${#conflicts[@]} -gt 0 ] && [ $FORCE -eq 0 ]; then
@@ -37,11 +41,12 @@ if [ ${#conflicts[@]} -gt 0 ] && [ $FORCE -eq 0 ]; then
   exit 1
 fi
 
-# 1. Claude Code scripts.
-mkdir -p "$CLAUDE"
-cp claude/* "$CLAUDE/"
-chmod +x "$CLAUDE/tap.js" "$CLAUDE/facts.js" "$CLAUDE/ping.sh" "$CLAUDE/classify.js"
-echo "Claude Code scripts → $CLAUDE"
+# 1. The rules (core) and the agent adapters: always the package's copy.
+mkdir -p "$VB/core" "$VB/adapters"
+cp core/* "$VB/core/"
+for a in adapters/*/; do a="${a%/}"; rm -rf "$VB/$a"; cp -R "$a" "$VB/$a"; done
+chmod +x "$VB/core/classify.js" "$VB"/adapters/*/*.js "$VB"/adapters/*/*.sh 2>/dev/null || true
+echo "Rules and agent adapters → $VB"
 
 # 2. Your rules file, only if you don't have one.
 mkdir -p "$CONF_DIR"
@@ -82,17 +87,47 @@ if (added.length) {
 if (kept.length) console.log(`Kept your own binding for: ${kept.join('; ')}`);
 NODE
 
+# 5. Codex hooks: append ours without changing existing entries.
+if [ "$CODEX" -eq 1 ]; then
+  node - "$HOME/.codex/hooks.json" "$STAMP" <<'NODE'
+const fs = require('fs');
+const path = require('path');
+const [file, stamp] = process.argv.slice(2);
+const exists = fs.existsSync(file);
+const config = exists ? JSON.parse(fs.readFileSync(file, 'utf8')) : { hooks: {} };
+const hooks = config.hooks || (config.hooks = {});
+const events = ['SessionStart', 'UserPromptSubmit', 'PostToolUse', 'PermissionRequest', 'Stop', 'Interrupt'];
+const adapter = 'veroboard/adapters/codex/hook.js';
+const added = [];
+for (const event of events) {
+  const entries = hooks[event] || (hooks[event] = []);
+  if (entries.some((entry) => (entry.hooks || []).some((hook) => typeof hook.command === 'string' && hook.command.includes(adapter)))) continue;
+  entries.push({ hooks: [{ type: 'command', command: `node ~/.config/${adapter}`, timeout: 5 }] });
+  added.push(event);
+}
+if (added.length) {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  if (exists) fs.copyFileSync(file, `${file}.bak-${stamp}`);
+  fs.writeFileSync(file, JSON.stringify(config, null, 2) + '\n');
+}
+console.log(added.length ? `Codex hooks added: ${added.join(', ')}` : 'Codex hooks: already there.');
+console.log('Reminder: Codex needs [features] hooks = true in ~/.codex/config.toml.');
+NODE
+elif [ -d "$HOME/.codex" ]; then
+  echo 'Hint: ./install.sh --codex adds the Codex hooks.'
+fi
+
 cat <<'EOF'
 
 Last step, by hand: add this to ~/.claude/settings.json (merge into your existing "hooks" arrays; don't replace
 them). Put your current status line command after "--", or nothing after it if you have none.
 
 {
-  "statusLine": { "type": "command", "command": "node ~/.claude/veroboard/tap.js -- <your status line command, or nothing>", "padding": 0 },
-  "subagentStatusLine": { "type": "command", "command": "node ~/.claude/veroboard/subagents.js" },
+  "statusLine": { "type": "command", "command": "node ~/.config/veroboard/adapters/claude/tap.js -- <your status line command, or nothing>", "padding": 0 },
+  "subagentStatusLine": { "type": "command", "command": "node ~/.config/veroboard/adapters/claude/subagents.js" },
   "hooks": {
-    "Stop": [ { "hooks": [ { "type": "command", "command": "sh ~/.claude/veroboard/ping.sh", "timeout": 5 } ] } ],
-    "Notification": [ { "hooks": [ { "type": "command", "command": "sh ~/.claude/veroboard/ping.sh", "timeout": 5 } ] } ]
+    "Stop": [ { "hooks": [ { "type": "command", "command": "sh ~/.config/veroboard/adapters/claude/ping.sh", "timeout": 5 } ] } ],
+    "Notification": [ { "hooks": [ { "type": "command", "command": "sh ~/.config/veroboard/adapters/claude/ping.sh", "timeout": 5 } ] } ]
   }
 }
 

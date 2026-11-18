@@ -38,7 +38,7 @@ Top to bottom:
 - **Lanes.** Pinned by hand → Blocked. A dialog open in its tab → Blocked ("Prompt"). Herdr says working → Working.
   Idle with background work (sub-agents, monitors, shells that wait, helper terminals) → Waiting. Idle and its last
   message asks you something or says it waits on someone → Blocked ("You", or the name). Otherwise → Done.
-- **Blocked reasons** are decided by a rule set in `~/.claude/veroboard/rules.js`; hovering the badge names the rule.
+- **Blocked reasons** are decided by a rule set in `~/.config/veroboard/core/rules.js`; hovering the badge names the rule.
 - **Done** cards are green until you've looked at them, then grey. A card glows once when its agent finishes or asks.
 - The card whose terminal is on screen gets a 2px ring and a faint wash.
 - **Click** a card: focus that agent's terminal. **Right-click**: a menu with Pin to Blocked / Unpin, Move to Done (in
@@ -64,12 +64,15 @@ Top to bottom:
 - **Herdr:** `agents`, `spaces`, `panes`, `terminals`, `shared`/`setShared` (keys `veroboard.*`), `keys`, `nextCommand`,
   `openOverlay`, `setAgentOrder`, `readTextFile`, `writeTextFile`, `watchFolder`, `exec`; commands `agent.focus`,
   `tab.select`, `tab.rename`, `space.new`, `space.select`, `layout.resize`, `mod.open`.
-- **Claude Code side** (`claude/` in this repo, installed to `~/.claude/veroboard/`): `tap.js` wraps the status line and
+- **Claude Code side** (`adapters/claude/` in this repo, installed to `~/.config/veroboard/adapters/claude/`, with the rules in `core/`): `tap.js` wraps the status line and
   writes each agent's facts to `~/.config/veroboard/state/sessions/<terminal>.json`; `subagents.js` (the sub-agent status line)
   writes `subagents/`; `ping.sh` (Stop and Notification hooks) writes `pings/`; `rules.js` + `defaults.json` are the
   Blocked rules; `classify.js` tests a message.
+- **Codex side** (`adapters/codex/hook.js`, hooks in `~/.codex/hooks.json`): on each prompt, tool call, permission
+  request and stop it reads the Codex session log (model, effort, tokens, last message, launched terminals) and writes
+  the same sessions file. Shared code (git, writing the file, pings) is in `core/session.js`.
 - **Programs and files outside the mod folder:** runs `node` (`classify.js`, for the dialog and the rules' hover text);
-  reads `~/.config/veroboard/state/`, `~/.claude/veroboard/defaults.json` and `~/.config/veroboard/config.json`; the dialog writes
+  reads `~/.config/veroboard/state/`, `~/.config/veroboard/core/defaults.json` and `~/.config/veroboard/config.json`; the dialog writes
   that config file.
 
 ## Watch out
@@ -90,6 +93,10 @@ Top to bottom:
 - Every color is a theme color except Waiting's light blue and the marigold for "waits on someone" (#f2bc78).
 - If `veroboard` is taken, rename the layout, both mods, the `layout:veroboard` keys section and the `veroboard.*`
   shared keys before installing.
+- Codex hooks run in a shared background process, and Codex helpers that other agents start inherit those agents'
+  `HC_TERMINAL_ID`. So the Codex hook never trusts that variable. It needs `originator: "codex-tui"` in the session log,
+  then asks `hc ls` / `hc get` for a terminal running Codex in the same folder (the title names the thread when there
+  are two).
 
 ## Done when
 
@@ -97,4 +104,6 @@ Top to bottom:
 - A card shows model, effort, context and branch within one status line run of the agent starting.
 - Clicking a card shows its tab's terminals; an agent that asks you something lands in Blocked with a reason.
 - An agent that opens another gets a cable to it.
+- A Codex tab gets its model, effort and context on its first prompt, and a Codex helper run by another agent never
+  changes that agent's card.
 - `herdr-app check mods/veroboard` passes, the gear opens Veroboard settings, and switching layouts away and back works.

@@ -4,7 +4,7 @@
  * Claude Code statusLine wrapper for the Herdr board. It writes this session's board facts (facts.js), and runs
  * your own status line, if any, with the same input, printing what it prints:
  *
- *   "statusLine": { "type": "command", "command": "node ~/.claude/veroboard/tap.js -- node ~/.claude/statusline.js" }
+ *   "statusLine": { "type": "command", "command": "node ~/.config/veroboard/adapters/claude/tap.js -- node ~/.claude/statusline.js" }
  *
  * After --: your status line command. One argument is run by the shell (pipes work: -- "my-line | tr a b");
  * several are run as they are. Nothing after --: prints nothing, only the facts are written.

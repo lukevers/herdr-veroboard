@@ -6,11 +6,11 @@
 // Tabs (user, 2026-11-17: one long scroll hid the rules at the bottom): Display, Card, Test, People, Asks, Patterns, Rules.
 // Display edits the config's "board" section (defaults: the package's defaults.json "board"); the board reloads it
 // when the folder changes. A setting equal to the default is removed from your file rather than written.
-// The rules live in ~/.claude/veroboard (rules.js: the built-in rules, each with what it looks for, more detail and
+// The rules live in ~/.config/veroboard/core (rules.js: the built-in rules, each with what it looks for, more detail and
 // an example; defaults.json: the package's lists). Your own additions are ~/.config/veroboard/config.json, which
 // this dialog edits: every list here is added to the defaults, and switching a built-in rule off writes its id to
 // blocked.disable. Each change is saved at once (a safe write: if the file changed on disk meanwhile, it reloads
-// instead). Agents pick it up on their next status-line run. The Test tab runs ~/.claude/veroboard/classify.js,
+// instead). Agents pick it up on their next status-line run. The Test tab runs ~/.config/veroboard/core/classify.js,
 // so it always uses the saved rules.
 
 import { div, svg } from "gpui-kit";
@@ -164,10 +164,10 @@ export class SettingsPanel {
 
   async load() {
     try {
-      const r = await exec(await this.node(), [`${home()}/.claude/veroboard/classify.js`, "--info"], { timeout: 10000 });
+      const r = await exec(await this.node(), [`${home()}/.config/veroboard/core/classify.js`, "--info"], { timeout: 10000 });
       this.info = JSON.parse(r.stdout);
     } catch (e) {
-      this.status = `Can't run ~/.claude/veroboard/classify.js (${e?.message ?? e}). Is the board package installed, and has an agent run since (it records where Node is)?`;
+      this.status = `Can't run ~/.config/veroboard/core/classify.js (${e?.message ?? e}). Is the board package installed, and has an agent run since (it records where Node is)?`;
       return;
     }
     try { this.defaults = JSON.parse(await readTextFile(this.info.defaults)); } catch { this.defaults = {}; }
@@ -610,7 +610,7 @@ export class SettingsPanel {
     if (!text.trim()) { this.result = undefined; cx.notify(); return; }
     cx.spawn(async (cx) => {
       try {
-        const r = await exec(await this.node(), [`${home()}/.claude/veroboard/classify.js`, text], { timeout: 10000 });
+        const r = await exec(await this.node(), [`${home()}/.config/veroboard/core/classify.js`, text], { timeout: 10000 });
         if (seq !== this.testSeq) return;
         const out = JSON.parse(r.stdout);
         this.result = out.result;

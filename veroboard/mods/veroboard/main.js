@@ -108,12 +108,12 @@ export default class Board extends View {
     });
 
     // The cards and the header (its pie sorts agents into the same columns) both read the session files.
-    // What each Blocked rule looks for (~/.claude/veroboard/classify.js --info), for the Blocked badge's hover text.
+    // What each Blocked rule looks for (~/.config/veroboard/core/classify.js --info), for the Blocked badge's hover text.
     if (!props()?.role) cx.spawn(async (cx) => {
       try {
         // Node's path as facts.js recorded it: Herdr's exec doesn't see the shell's PATH (nvm, mise).
         const node = await readTextFile(`${home()}/.config/veroboard/state/node-path`).then(x => x.trim(), () => "node");
-        const r = await exec(node || "node", [`${home()}/.claude/veroboard/classify.js`, "--info"], { timeout: 10000 });
+        const r = await exec(node || "node", [`${home()}/.config/veroboard/core/classify.js`, "--info"], { timeout: 10000 });
         this.ruleWhy = Object.fromEntries((JSON.parse(r.stdout).builtins ?? []).map(b => Array.isArray(b) ? b : [b.id, b.what]));
         cx.notify();
       } catch (_) {}
@@ -140,7 +140,7 @@ export default class Board extends View {
           cx.notify();
         }
       });
-      // Tasks come from ~/.claude/subagents-herdr.js, a Claude Code subagentStatusLine hook.
+      // Tasks come from adapters/claude/subagents.js, a Claude Code subagentStatusLine hook.
       const dir = `${home()}/.config/veroboard/state/subagents`;
       cx.spawn(async (cx) => {
         await this.reload();
@@ -183,7 +183,7 @@ export default class Board extends View {
         if (Number.isFinite(at)) pings[address] = at;
       } catch {}
 
-      // ~/.claude/veroboard/facts.js writes the sessions file.
+      // ~/.config/veroboard/adapters/claude/facts.js writes the sessions file.
       try {
         const { pct, tokens, model, effort, window, shells, shellList, monitorList, launched, git, worktree, lastPrompt, awaiting } = JSON.parse(await readTextFile(`${home()}/.config/veroboard/state/sessions/${address}.json`));
         if (Number.isFinite(pct) && Number.isFinite(tokens) && typeof model === "string") {
@@ -228,7 +228,7 @@ export default class Board extends View {
     const shellList = session?.shellList ?? [];
     // A monitor past its expiry is gone even before the status line next runs.
     const monitorList = (session?.monitorList ?? []).filter(m => !Number.isFinite(m.expiresAt) || m.expiresAt > Date.now());
-    // Agents in their own tabs that another agent opened (herdr-app do tab.new …), from ~/.claude/veroboard/facts.js:
+    // Agents in their own tabs that another agent opened (herdr-app do tab.new …), from ~/.config/veroboard/adapters/claude/facts.js:
     // the opener's card counts the ones still live.
     const live = addr => terminals().some(x => x.address === addr && x.state === "live");
     // Herdr's own facts: the pane's git branch and folder, and since when its tab has been working.
@@ -320,7 +320,7 @@ export default class Board extends View {
   // A lane's visible height and its cards' total height, in zoom-1 px, from the same numbers as the layout.
   async loadView() {
     const json = async (path) => { try { return JSON.parse(await readTextFile(path)); } catch (_) { return {}; } };
-    const defaults = await json(`${home()}/.claude/veroboard/defaults.json`);
+    const defaults = await json(`${home()}/.config/veroboard/core/defaults.json`);
     const mine = await json(`${home()}/.config/veroboard/config.json`);
     setView(viewFrom(defaults.board, mine.board));
   }
