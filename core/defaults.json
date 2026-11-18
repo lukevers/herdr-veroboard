@@ -53,6 +53,12 @@
     "greyWhenSeen": true,
     "doneTimer": true,
     "activeRing": true,
+    "//toastPlace": "Where notifications pop up on the board (Veroboard settings → Notifications): top, middle or bottom, then left, center or right, as \"top-right\".",
+    "toastPlace": "top-right",
+    "//toastArea": "Over the \"board\" (the top half) or over the \"terminal\" (the bottom half); toastPlace is the spot in that area.",
+    "toastArea": "board",
+    "//noticeRead": "When a notification counts as read: \"open\" (opening the bell's list), \"visit\" (clicking it, or going to its agent's terminal) or \"hand\" (clicking it, or its ✓ in the list).",
+    "noticeRead": "visit",
     "//card": "What each card shows and where (Veroboard settings → Card): three lines, each with a left and right side; hidden badges; rows: the background work rows under a card.",
     "card": {
       "lines": [

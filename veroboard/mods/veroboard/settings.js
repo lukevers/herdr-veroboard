@@ -15,8 +15,8 @@
 
 import { div, svg, PathBuilder } from "gpui-kit";
 import { v_flex, h_flex, InputState, Input, TextareaState, Textarea, SliderState, Slider, SliderTrack, SliderIndicator, SliderThumb } from "gpui-base";
-import { theme, exec, home, readTextFile, writeTextFile, props, closeOverlay, agents, spaces } from "herdr";
-import { CARD_ITEMS, cardLayout, renderCard, TOP_ITEMS, topLayout, topItems, badge } from "./card.js";
+import { theme, exec, home, readTextFile, writeTextFile, props, closeOverlay, agents, spaces, shared, setShared } from "herdr";
+import { TOAST_PLACES, CARD_ITEMS, cardLayout, renderCard, TOP_ITEMS, topLayout, topItems, badge } from "./card.js";
 import { cablePalette, cableLayers, cableDash, paintAt } from "./cables.js";
 import { hint, pie, chip, newSpaceButton, gearButton, dividerLine, renderTopBar, bellButton, statPill, word } from "./topbar.js";
 
@@ -44,7 +44,7 @@ const SKELETON = {
   blocked: { asks: [], notAsks: [], nothingForYou: [], todoLabels: [], patterns: { asks: [], notAsks: [] }, disable: [] },
 };
 // The board's display settings: [key, label, help, kind, slider options]. Fallbacks match the package defaults.
-const VIEW_DEFAULTS = { cables: true, cablesThroughCards: 5, contextRamp: [50, 85], stuckMinutes: 15, glow: true, greyWhenSeen: true, doneTimer: true, activeRing: true };
+const VIEW_DEFAULTS = { cables: true, cablesThroughCards: 5, contextRamp: [50, 85], stuckMinutes: 15, glow: true, greyWhenSeen: true, doneTimer: true, activeRing: true, toastPlace: "top-right", toastArea: "board", noticeRead: "visit" };
 // Each group says which tab shows it (user, 2026-11-17: what's about a card goes on the Card tab, under its layout).
 const DISPLAY = [
   ["Patch cables", "display", [
@@ -75,6 +75,7 @@ const TABS = [
   // Looks, then what puts a card in Blocked (simple to advanced), then the sandbox (user, 2026-11-17).
   { key: "display", label: "Board" },
   { key: "card", label: "Card" },
+  { key: "notices", label: "Notifications" },
   { key: "people", label: "People", items: [
     { key: ["people", "names"], label: "People", placeholder: "Add a name, then Enter",
       help: "If you add names, only these count as people an agent waits on. Empty: any capitalized name does. Agents like t22 always count.", example: "person" },
@@ -626,6 +627,99 @@ export class SettingsPanel {
   cardTab(t) { return this.layoutEditor(t, "card", this.displayTab(t, "card")); }
   boardTab(t) { return this.layoutEditor(t, "top", this.displayTab(t, "display")); }
 
+  // The Notifications tab (user, 2026-11-18). Where they pop up: a 9-slice picker, the board in small, split 3 × 3.
+  // Each cell is a spot; the chosen one holds a small notice in that corner or edge (an agent's, with its colored left
+  // edge), the others a faint dot where it would go. A click saves it; the board moves its notices at once.
+  noticesTab(t) {
+    const place = TOAST_PLACES.includes(this.view("toastPlace")) ? this.view("toastPlace") : "top-right";
+    const name = (p) => (p === "middle-center" ? "Center" : p.replace("-", " ").replace(/^./, (c) => c.toUpperCase()));
+    const changed = this.user?.board && Object.prototype.hasOwnProperty.call(this.user.board, "toastPlace");
+    // Its colored edge curves with its corners, as on the board's notices.
+    const mini = () => h_flex().w(42).h(14).rounded(4).overflow_hidden().bg(t.popover).border(1).border_color(alpha(t.accent, "88"))
+      .child(h_flex().flex_1().h_full().rounded(3).bg(t.done).pl(2)
+      .child(v_flex().flex_1().h_full().rounded_l(2).bg(t.popover).px(4).gap(2).justify_center()
+        .child(div().w(20).h(2).rounded(1).bg(alpha(t.foreground, "aa")))
+        .child(div().w(13).h(2).rounded(1).bg(alpha(t.muted, "88")))));
+    const cell = (p) => {
+      const [row, col] = p.split("-"), on = p === place;
+      return h_flex().id(`place-${p}`).flex_1().h_full().p(4).rounded(4).cursor_pointer()
+        .items_start().when(row === "middle", (el) => el.items_center()).when(row === "bottom", (el) => el.items_end())
+        .when(col === "center", (el) => el.justify_center()).when(col === "right", (el) => el.justify_end())
+        .when(on, (el) => el.bg(alpha(t.accent, "1f"))).when(!on, (el) => el.hover((s) => s.bg(t.hover)))
+        .tooltip(name(p))
+        .on_click((_e, cx) => { if (!on) this.setView("toastPlace", p, cx); })
+        .child(on ? mini() : div().size(6).rounded(3).bg(alpha(t.dim, "99")));
+    };
+    // On the right of its row, like the Area switch (centered under the text, it looked like something was missing;
+    // user, 2026-11-18). 1.6 : 1, about a board's shape.
+    const grid = v_flex().w(208).h(130).flex_none().p(3).gap(3).rounded(8).bg(t.background).border(1).border_color(t.border)
+      .children(["top", "middle", "bottom"].map((row) => h_flex().flex_1().gap(3)
+        .children(["left", "center", "right"].map((col) => cell(`${row}-${col}`)))));
+    // A test notice (user, 2026-11-18): straight onto the board's stack (not through Herdr, and not into the bell's list),
+    // shaped like an agent's, with the chosen spot as its badge. The board draws its notices under this dialog, so the
+    // button closes it first; the notice shows where you picked, for 8s.
+    const test = () => {
+      const now = Date.now(), list = (Array.isArray(shared("veroboard.notices")) ? shared("veroboard.notices") : []).filter((n) => n && n.at + n.timeout > now);
+      setShared("veroboard.notices", [...list.slice(-9), {
+        id: `${now}-test`, at: now, timeout: 8000, title: "Test notification", body: "", level: "info", icon: null, action: null,
+        agent: { address: "", name: "Test notification", space: `${this.view("toastArea") === "terminal" ? "Terminal" : "Board"} · ${name(place)}`, why: { label: "Test", color: t.accent }, branch: null, parent: null },
+      }]);
+      closeOverlay(props()?.overlay);
+    };
+    // First in the section, above Area and Placement (under the tall picker it looked odd; user, 2026-11-18).
+    const testRow = h_flex().gap(10).items_center().py(10).border_b(1).border_color(t.border)
+      .child(v_flex().flex_1().min_w(0).gap(2)
+        .child(div().text_size(12.5).font_semibold().text_color(t.foreground).child("Try it"))
+        .child(div().text_size(11.5).text_color(t.muted).child("Shows a test notification where you picked. This dialog closes so you can see it.")))
+      .child(h_flex().id("notice-test").flex_none().h(26).px(10).items_center().rounded(6).cursor_pointer()
+        .bg(t.raised).border(1).border_color(t.border).text_size(11.5).text_color(t.foreground).hover((s) => s.bg(t.hover))
+        .on_click(() => test()).child("Send a test"));
+    // Over the board (top) or over the terminal (bottom; user, 2026-11-18): a two-way switch, the chosen side raised
+    // with the light accent border, like the top bar's space chips.
+    const area = this.view("toastArea") === "terminal" ? "terminal" : "board";
+    // A switch of a few choices for one setting: the chosen one raised.
+    const segs = (setting, current, choices) => h_flex().flex_none().p(2).gap(2).rounded(7).bg(t.background).border(1).border_color(t.border)
+      .children(choices.map(([key, label]) => h_flex().id(`${setting}-${key}`).h(24).px(12).items_center().rounded(5).cursor_pointer().text_size(11.5)
+        .border(1).border_color(current === key ? alpha(t.accent, "55") : "#00000000")
+        .when(current === key, (el) => el.bg(t.raised).text_color(t.foreground)).when(current !== key, (el) => el.text_color(t.muted).hover((s) => s.text_color(t.foreground)))
+        .on_click((_e, cx) => { if (current !== key) this.setView(setting, key, cx); }).child(label)));
+    // When a notification counts as read (user, 2026-11-18). Each choice says what reads one.
+    const readMode = ["open", "visit", "hand"].includes(this.view("noticeRead")) ? this.view("noticeRead") : "visit";
+    const readHelp = {
+      open: "Opening the bell's list marks everything it shows as read.",
+      visit: "A notification stays unread until you click it, or go to its agent's terminal any other way (its card, its tab, a key).",
+      hand: "A notification stays unread until you click it, or mark it read with its ✓ in the list.",
+    }[readMode];
+    const readSection = v_flex()
+      .child(heading(t, "Read and unread"))
+      .child(h_flex().gap(10).items_center().py(10)
+        .child(v_flex().flex_1().min_w(0).gap(2)
+          .child(div().text_size(12.5).font_semibold().text_color(t.foreground).child("Mark as read"))
+          .child(div().text_size(11.5).text_color(t.muted).child(`${readHelp} In the list, the row under the pointer has ✓ or ↺ (mark read or unread) and × (remove), and Mark all read works in every mode.`)))
+        .child(segs("noticeRead", readMode, [["open", "On open"], ["visit", "On visit"], ["hand", "By hand"]])));
+    const areaRow = h_flex().gap(10).items_center().py(10).border_b(1).border_color(t.border)
+      .child(v_flex().flex_1().min_w(0).gap(2)
+        .child(div().text_size(12.5).font_semibold().text_color(t.foreground).child("Area"))
+        .child(div().text_size(11.5).text_color(t.muted).child("Over the board at the top, or over the terminal at the bottom. The spot below is inside that area.")))
+      .child(segs("toastArea", area, [["board", "Board"], ["terminal", "Terminal"]]));
+    return sections(t, [v_flex()
+      .child(heading(t, "Pop-up notifications"))
+      .child(testRow)
+      .child(areaRow)
+      // The text on the left (with the chosen spot and Reset under it), the picker on the right.
+      .child(h_flex().gap(16).items_start().py(10)
+        .child(v_flex().flex_1().min_w(0).gap(2)
+          .child(div().text_size(12.5).font_semibold().text_color(t.foreground).child("Placement"))
+          .child(div().text_size(11.5).text_color(t.muted).child(`Where notifications pop up ${area === "terminal" ? "over the terminal" : "on the board"}. The newest sits nearest the edge. The bell's list still opens under the bell.`))
+          .child(h_flex().mt(10).gap(8).items_center()
+            .child(div().text_size(12.5).text_color(t.foreground).child(name(place)))
+            .when(Boolean(changed), (el) => el.child(h_flex().id("reset-toastPlace").flex_none().h(20).px(7).items_center().rounded(4).cursor_pointer()
+              .text_size(11).text_color(t.muted).hover((s) => s.bg(t.hover).text_color(t.foreground))
+              .tooltip(`Back to the default (${name(this.defaultView("toastPlace"))})`)
+              .on_click((_e, cx) => this.setView("toastPlace", this.defaultView("toastPlace"), cx)).child("Reset")))))
+        .child(grid)), readSection]);
+  }
+
   select(tab, cx) { this.tab = tab; remember(tab); cx.notify(); }
 
   // A rule's example, into the Test tab.
@@ -825,6 +919,7 @@ export class SettingsPanel {
     const tab = TABS.find((x) => x.key === this.tab) ?? TABS[0];
     const content = tab.key === "display" ? (this.user ? this.boardTab(t) : div())
       : tab.key === "card" ? (this.user ? this.cardTab(t) : div())
+      : tab.key === "notices" ? (this.user ? this.noticesTab(t) : div())
       : tab.key === "test" ? this.testTab(t)
       : tab.key === "rules" ? this.rulesTab(t)
       : v_flex().gap(18).when(Boolean(tab.intro), (el) => el.child(callout(t, tab.intro, this.introShows(t, tab.key))))

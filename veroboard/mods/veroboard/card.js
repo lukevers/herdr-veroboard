@@ -8,7 +8,10 @@ import { h_flex, v_flex } from "gpui-base";
 // The board's display settings (Veroboard settings → Display; user, 2026-11-17): the package's defaults.json "board"
 // section, then yours from ~/.config/veroboard/config.json. Theme colors stay the theme's. Every copy loads them
 // (loadView) and reloads when the folder changes. These fallbacks match the package defaults.
-const VIEW_DEFAULTS = { cables: true, cablesThroughCards: 5, contextRamp: [50, 85], stuckMinutes: 15, glow: true, greyWhenSeen: true, doneTimer: true, activeRing: true, card: null, top: null };
+const VIEW_DEFAULTS = { cables: true, cablesThroughCards: 5, contextRamp: [50, 85], stuckMinutes: 15, glow: true, greyWhenSeen: true, doneTimer: true, activeRing: true, card: null, top: null, toastPlace: "top-right", toastArea: "board", noticeRead: "visit" };
+// Where the board's notifications pop up (Veroboard settings → Notifications): over the board or over the terminal
+// (toastArea: "board" or "terminal"), then a row and a column of that area, 3 × 3 (toastPlace).
+const TOAST_PLACES = ["top-left", "top-center", "top-right", "middle-left", "middle-center", "middle-right", "bottom-left", "bottom-center", "bottom-right"];
 let VIEW = { ...VIEW_DEFAULTS, card: null, top: null };
 const viewFrom = (...layers) => {
   const v = { ...VIEW_DEFAULTS };
@@ -374,7 +377,7 @@ const renderCard = (m, t, o = {}) => {
 };
 
 export {
-  VIEW, VIEW_DEFAULTS, viewFrom, setView, stuckMs, WAITING,
+  VIEW, VIEW_DEFAULTS, TOAST_PLACES, viewFrom, setView, stuckMs, WAITING,
   alpha, dot, badge, modelBadge, effortBadge, mix, glass, gauge, duration, compactTokens, icon,
   CARD_ITEMS, CARD_DEFAULT, cardLayout, renderCard, TOP_ITEMS, TOP_DEFAULT, topLayout, topItems, isAddedDivider, makeLayout,
 };

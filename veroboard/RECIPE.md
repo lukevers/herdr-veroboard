@@ -48,7 +48,9 @@ Top to bottom:
 - **Keys** (keys.json section `layout:veroboard`): ⌘F focuses the filter (every word must match something on a card;
   Esc clears), ⌘1 shows all spaces, ⌘2–⌘9 pick a space.
 - **The gear** opens a settings dialog: drag the top bar's items and the card's badges into place or into Hidden;
-  switches and sliders for cables, glow, the context color ramp and more; lists that tune the Blocked rules, with
+  switches and sliders for cables, glow, the context color ramp and more; where notifications pop up (Notifications
+  tab: over the board or the terminal, `board.toastArea`, then a 3 × 3 picker, `board.toastPlace`, top-right of the
+  board by default, and a button that sends a test); lists that tune the Blocked rules, with
   examples; every built-in rule with an on/off switch; and a box to test a message.
 - Tabs are named after what's in them (Claude Code's title, the running program, or the folder) until you rename one.
 
@@ -62,14 +64,16 @@ Top to bottom:
   `mod.open veroboard`, shown when there's an `overlay` prop and no role), `names.js` (tab names).
 - **Mod `veroboard-menu`**: the right-click popup.
 - **Mod `veroboard-toast`**: the layout's `"toast"` (herdr-app#364), so Herdr hands it every notification. It puts each
-  one in shared `veroboard.notices` (shown in the board's top-right corner, light accent border, newest on top, at
+  one in shared `veroboard.notices` (shown in the board's top-right corner, or where `board.toastPlace` says; light accent border, newest nearest the edge, at
   most 3; a click runs its action, × dismisses, it times out) and `veroboard.noticeLog` (the last 50), then closes
   Herdr's toast. A notification about an agent (Herdr's carry `agent.focus {terminal}`) gets that agent's card facts
   saved on it by the board within a second (name, why it's in its lane, id, space, branch, who opened it) and shows as a
   slim card: a colored left edge in the why's color (rounded with the toast's corners), name, why, id; then space,
   branch, parent. Opened from the bell with `props.view: "history"`, it lists the log newest first (at least four rows
-  tall, each with its age): new ones on the popup's color, then a sawtooth edge and the read ones (seen in an earlier
-  look, or clicked or dismissed on the board) darker and dimmed. The bell and the list follow the board's space: one
+  tall, each with its age): unread ones on the popup's color, then a sawtooth edge and the read ones darker and dimmed.
+  When one counts as read is `board.noticeRead`: `"open"` (opening the list), `"visit"` (the default: clicking it, or
+  being on its agent's terminal) or `"hand"` (clicking it, or its ✓). In every mode the row under the pointer has ✓ or
+  ↺ (mark unread) and, under it, × (remove that one), the header has Mark all read, and dismissing a toast counts as read. The bell and the list follow the board's space: one
   space selected shows that space's notifications (plus Herdr's own, which belong to no space); All Spaces shows all.
   Chips under the list's header pick another space.
 - **Shipped mods used:** `menu` (tab right-click), `new-menu` (the + button). Icons from `workspace-chrome` and `icons/`.
@@ -95,6 +99,10 @@ Top to bottom:
 
 - The board draws notifications itself, so one that arrives while a dialog (like Veroboard settings) is open waits
   under it. Herdr's own toasts float above dialogs.
+- Over the terminal (`toastArea: "terminal"`), a mod can't draw outside its block, so the board opens a copy of itself
+  (`role: "toasts"`) as a frameless window there, sized to the stack. It doesn't take the keyboard. Its place comes
+  from the layout's sizes (the 52px header, the board's height, the workspace padding and tab strip): a layout with
+  other sizes needs `syncToastWindow` changed to match.
 - **The board needs the Claude Code side.** Copying the layout and mods alone gives cards with no model, context or
   Blocked reasons. Run `./install.sh` from the repo root and add its `~/.claude/settings.json` lines (see the README).
 - Herdr runs programs without the shell's PATH. `facts.js` saves the path of the Node it runs under to

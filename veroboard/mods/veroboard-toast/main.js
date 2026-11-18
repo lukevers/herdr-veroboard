@@ -70,18 +70,27 @@ export default class VeroboardToast extends View {
     const sp = all.find((s) => s.id === this.space) ?? null;
     const whole = list(LOG).slice().reverse();
     const log = whole.filter((n) => noticeIn(n, sp));
-    // New: unseen when the bell opened this (or when you picked a space here), or arrived since. They stay bright
-    // while it's open. Read: seen before, clicked or dismissed on the board. Read rows are dimmed.
+    // When one counts as read (p.mode, Veroboard settings → Notifications; user, 2026-11-18): "open": opening this marks
+    // what it shows (the bell did, and passed their ids: they stay bright while it's open); "visit" and "hand": they
+    // stay unread until clicked, ✓, Mark all read, or (visit) their agent is visited. ↺ marks one unread again.
+    // Unread rows are bright on top; read ones dimmed under the sawtooth.
+    const mode = ["open", "visit", "hand"].includes(p.mode) ? p.mode : "visit";
     this.fresh ??= new Set(Array.isArray(p.fresh) ? p.fresh : []);
     const seenBefore = Number(p.seenBefore) || 0;
-    const isRead = (n) => Boolean(n.read) || (n.seen ? !this.fresh.has(n.id) : n.at <= seenBefore);
+    const unread = (n) => Boolean(n.unread) || (!n.read && !n.seen && n.at > seenBefore);
+    const isRead = (n) => !(unread(n) || (this.fresh.has(n.id) && !n.read));
     const fresh = log.filter((n) => !isRead(n)), read = log.filter(isRead);
-    // Picking a space shows its notifications, so the unseen ones there count as seen now (and stay bright).
+    // Mark these read (or unread): in the log the bell counts from.
+    const mark = (ids, asRead) => {
+      ids.forEach((i) => this.fresh.delete(i));
+      setShared(LOG, list(LOG).map((n) => (ids.includes(n.id) ? (asRead ? { ...n, read: true, unread: false } : { ...n, read: false, seen: false, unread: true }) : n)));
+    };
+    // Picking a space shows its notifications; with "open", the unread ones there count as seen now (and stay bright).
     const pick = (id, cx) => {
       this.space = id;
       const s = all.find((x) => x.id === id) ?? null;
-      const now2 = list(LOG), ids = now2.filter((n) => !n.read && !n.seen && n.at > seenBefore && noticeIn(n, s)).map((n) => n.id);
-      if (ids.length) { ids.forEach((i) => this.fresh.add(i)); setShared(LOG, now2.map((n) => (ids.includes(n.id) ? { ...n, seen: true } : n))); }
+      const now2 = list(LOG), ids = mode !== "open" ? [] : now2.filter((n) => unread(n) && noticeIn(n, s)).map((n) => n.id);
+      if (ids.length) { ids.forEach((i) => this.fresh.add(i)); setShared(LOG, now2.map((n) => (ids.includes(n.id) ? { ...n, seen: true, unread: false } : n))); }
       cx?.notify?.();
     };
     const count = (s) => whole.filter((n) => noticeIn(n, s)).length;
@@ -94,10 +103,35 @@ export default class VeroboardToast extends View {
       .child(label).when(n > 0, (el) => el.child(div().text_size(10.5).text_color(t.dim).child(String(n))));
     const dark = mix(t.popover, t.canvas ?? "#000000", 0.75);
     // The last new row has no bottom line: the sawtooth is its edge.
-    const row = (n) => h_flex().id(`log-${n.id}`).relative().h(ROW_H).flex_none().px(14).gap(11).items_center()
+    // On the row under the pointer, at its right, one above the other: ✓ (mark read) on an unread one, ↺ (mark unread) on a read one. The
+    // space is kept on every row, so nothing moves when it shows. A read row under the pointer is less dimmed.
+    // Under it, × removes that one notification (from the list and, if it's still up, the board; user, 2026-11-18).
+    const btn = (id, label, tip, act) => div().id(id).size(22).flex().items_center().justify_center().rounded(5)
+      .cursor_pointer().text_size(12.5).text_color(t.muted).hover((s) => s.bg(t.raised).text_color(t.foreground))
+      .tooltip(tip)
+      .on_mouse_down("left", (_e, cx) => cx.stop_propagation())
+      .on_click((_e, cx) => { cx.stop_propagation(); act(); })
+      .child(label);
+    const remove = (id) => {
+      this.fresh.delete(id);
+      setShared(LOG, list(LOG).filter((n) => n.id !== id));
+      if (list(NOTICES).some((n) => n.id === id)) setShared(NOTICES, list(NOTICES).filter((n) => n.id !== id));
+      if (this.hover === id) this.hover = null;
+    };
+    const toggle = (n) => {
+      const on = this.hover === n.id, r = isRead(n);
+      return v_flex().flex_none().w(22).gap(2).justify_center()
+        .when(on, (el) => el
+          .child(btn(`log-mk-${n.id}`, r ? "↺" : "✓", r ? "Mark as unread" : "Mark as read", () => mark([n.id], !r)))
+          .child(btn(`log-rm-${n.id}`, "×", "Remove", () => remove(n.id))));
+    };
+    const row = (n) => h_flex().id(`log-${n.id}`).relative().h(ROW_H).flex_none().pl(14).pr(8).gap(11).items_center()
       .when(!(n === fresh[fresh.length - 1] && read.length > 0), (el) => el.border_b(1).border_color(t.border))
-      .when(isRead(n), (el) => el.opacity(0.45))
+      .when(isRead(n), (el) => el.opacity(this.hover === n.id ? 0.8 : 0.45))
+      .on_hover((on, cx) => { if (on) this.hover = n.id; else if (this.hover === n.id) this.hover = null; cx.notify(); })
+      // Clicking one reads it (and goes to its agent, closing the list).
       .when(Boolean(n.action), (el) => el.cursor_pointer().hover((s) => s.bg(t.hover)).on_click(() => {
+        mark([n.id], true);
         run(n.action.name, n.action.args ?? {});
         closeOverlay(p.overlay);
       }))
@@ -107,7 +141,8 @@ export default class VeroboardToast extends View {
         .child(v_flex().flex_1().min_w(0).gap(6)
           .child(div().h(18).flex_none().truncate().font_semibold().text_size(12.5).text_color(t.foreground).child(n.title))
           .child(div().h(16).flex_none().truncate().text_size(11.5).text_color(t.muted).child(n.body ?? "")))
-        .child(div().flex_none().text_size(11).text_color(t.dim).child(ago(now - n.at))))
+        .child(div().flex_none().text_size(11).text_color(t.dim).child(ago(now - n.at)))
+        .child(toggle(n)))
       // About an agent (the board saved its card facts on arrival): a slim card, as on the board's notices
       // (user, 2026-11-18): a stripe in the why's color; name, why + age, id; then space, branch, who opened it.
       .when(Boolean(n.agent?.name), (el) => el
@@ -126,12 +161,17 @@ export default class VeroboardToast extends View {
             .when(Boolean(n.agent.branch), (el) => el.child(n.agent.branch.worktree
               ? pill(t, n.agent.branch.name, t.ansi4, alpha(t.ansi4, "26"), false, "mods/workspace-chrome/layers.svg", true)
               : pill(t, n.agent.branch.name, t.muted, t.raised, false, "mods/workspace-chrome/git-branch.svg", true)))
-            .when(Boolean(n.agent.parent), (el) => el.child(pill(t, `${n.agent.parent.name || n.agent.parent.address} · ${n.agent.parent.address}`, t.muted, t.raised, false, "mods/veroboard/launched-by.svg"))))));
+            .when(Boolean(n.agent.parent), (el) => el.child(pill(t, `${n.agent.parent.name || n.agent.parent.address} · ${n.agent.parent.address}`, t.muted, t.raised, false, "mods/veroboard/launched-by.svg")))))
+        .child(toggle(n)));
     // A popup is as big as its content, so the list gets a real height (see ROW_H).
     return v_flex().w(380).bg(t.popover).rounded(10).border(1).border_color(alpha(t.accent, "55")).overflow_hidden()
       .child(h_flex().flex_none().h(40).px(14).gap(8).items_center().border_b(1).border_color(t.border)
         .child(svg("mods/veroboard/bell.svg").size(13).text_color(t.muted))
         .child(div().flex_1().text_size(12.5).font_semibold().text_color(t.foreground).child("Notifications"))
+        // Marks what's shown read (this space's, or all), when any is unread.
+        .when(fresh.length > 0, (el) => el.child(div().id("log-read-all").px(7).py(3).rounded(5).text_size(11.5).text_color(t.muted)
+          .cursor_pointer().hover((s) => s.bg(t.hover).text_color(t.foreground))
+          .on_click(() => mark(log.map((n) => n.id), true)).child("Mark all read")))
         .when(log.length > 0, (el) => el.child(div().id("log-clear").px(7).py(3).rounded(5).text_size(11.5).text_color(t.muted)
           .cursor_pointer().hover((s) => s.bg(t.hover).text_color(t.foreground))
           // Clears what's shown: this space's (and Herdr's own), or all of them.

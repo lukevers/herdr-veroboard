@@ -5,7 +5,7 @@ import { h_flex, v_flex, InputState, Input } from "gpui-base";
 import { syncNames } from "./names.js";
 // The card, its badges, colors and display settings (shared with the settings dialog's example card).
 import {
-  VIEW, viewFrom, setView, stuckMs, WAITING, alpha, dot, badge, mix, glass, gauge, duration, icon, renderCard, compactTokens,
+  VIEW, TOAST_PLACES, viewFrom, setView, stuckMs, WAITING, alpha, dot, badge, mix, glass, gauge, duration, icon, renderCard, compactTokens,
 } from "./card.js";
 // The patch cables' drawing (shared with the settings dialog's example).
 import { cablePalette, cableLayers } from "./cables.js";
@@ -13,7 +13,7 @@ import { cablePalette, cableLayers } from "./cables.js";
 import { SYMBOL, hint, pie, chip, newSpaceButton, gearButton, dividerLine, renderTopBar, bellButton, statPill, word } from "./topbar.js";
 // Veroboard settings: this mod opened as a dialog (mod.open veroboard) is the settings panel, not a board.
 import { SettingsPanel } from "./settings.js";
-import { agents, spaces, panes, terminals, props, run, openOverlay, setAgentOrder, theme, keys, nextCommand, shared, setShared, window, layout, readTextFile, watchFolder, home, settings, exec } from "herdr";
+import { agents, spaces, panes, terminals, focused, props, run, openOverlay, closeOverlay, setAgentOrder, theme, keys, nextCommand, shared, setShared, window, layout, readTextFile, watchFolder, home, settings, exec } from "herdr";
 
 // The board's columns, by urgency. Herdr reports blocked, working, done (finished, not yet seen) and idle;
 // the board splits Herdr's done and idle by whether the agent still has something running for it:
@@ -32,7 +32,9 @@ const stateColor = (t, key) => key === "waiting" ? WAITING : t[key];
 // space (enrichNotices saves it; older ones only have the space's name). Herdr's others belong to no space, so every
 // space shows them. `sp`: a space ({id, name}), or null for all.
 const noticeIn = (n, sp) => !sp || !n.agent || (n.agent.spaceId ? n.agent.spaceId === sp.id : !n.agent.space || n.agent.space === sp.name);
-const noticeUnread = (n) => !n.read && !n.seen && n.at > (Number(shared("veroboard.noticesSeen")) || 0);
+// Unread: marked unread by hand (↺ in the list), or not read (clicked, dismissed, ✓, its agent visited), not seen in
+// the list when opening it marks them (noticeRead "open"), and newer than the old one-time mark (noticesSeen).
+const noticeUnread = (n) => Boolean(n.unread) || (!n.read && !n.seen && n.at > (Number(shared("veroboard.noticesSeen")) || 0));
 // Background work that runs this long with no news may be stuck, so its time turns pink. Sub-agents and
 // shells that wait: time since they started. Monitors: time since their last event (or their start).
 // (VIEW.stuckMinutes, 15 by default: stuckMs())
@@ -115,8 +117,13 @@ export default class Board extends View {
     // The cards and the header (its pie sorts agents into the same columns) both read the session files.
     // What each Blocked rule looks for (~/.config/veroboard/core/classify.js --info), for the Blocked badge's hover text.
     // The board copy drops expired notices (veroboard-toast adds them), which also redraws to take them off.
+    // The notices over the terminal (toastArea "terminal"): a copy of this mod in a frameless window (syncToastWindow).
+    // It only draws them; the board copy keeps them.
+    if (props()?.role === "toasts") return;
+    if (!props()?.role) cx.timer.every(200, () => this.syncToastWindow());
     if (!props()?.role) cx.timer.every(1000, () => {
       this.enrichNotices();
+      this.readVisited();
       const all = shared("veroboard.notices");
       if (!Array.isArray(all) || !all.length) return;
       const live = all.filter((n) => n && n.at + n.timeout > Date.now());
@@ -558,16 +565,38 @@ export default class Board extends View {
     })();
     for (const [k, l] of lists) if (l.some(need)) setShared(k, l.map((n) => (need(n) ? { ...n, agent: snap(n.action.args.terminal) } : n)));
   }
-  noticeStack(t) {
+  // `floating`: drawn in the window over the terminal (role "toasts"), in its own flow; else on the board, placed by
+  // toastPlace, and not at all when they go over the terminal.
+  // noticeRead "visit" (user, 2026-11-18): going to an agent counts as reading what it told you. While Herdr's window
+  // is in front and the focused terminal is an agent's, its unread notifications older than 2s (so its toast still
+  // shows first) are marked read. Herdr only notifies about an agent you weren't looking at. Runs every second.
+  readVisited() {
+    if ((["open", "visit", "hand"].includes(VIEW.noticeRead) ? VIEW.noticeRead : "visit") !== "visit") return;
+    if (!window()?.active) return;
+    const f = focused();
+    const here = [f?.terminal, f?.shown, f?.agent].filter(Boolean);
+    if (!here.length) return;
+    const KEY = "veroboard.noticeLog", now = Date.now();
+    const log = Array.isArray(shared(KEY)) ? shared(KEY) : [];
+    const mine = (n) => n && now - n.at > 2000 && noticeUnread(n) && here.includes(n.agent?.address || n.action?.args?.terminal);
+    if (log.some(mine)) setShared(KEY, log.map((n) => (mine(n) ? { ...n, read: true, unread: false } : n)));
+  }
+  noticeStack(t, floating = false) {
+    if (!floating && VIEW.toastArea === "terminal") return null;
     const KEY = "veroboard.notices", now = Date.now();
     const all = Array.isArray(shared(KEY)) ? shared(KEY) : [];
-    const list = all.filter((n) => n && n.at + n.timeout > now).slice(-3).reverse();
+    // Where (Veroboard settings → Notifications; user, 2026-11-18): top, middle or bottom of the board, then left, center
+    // or right. Newest nearest the edge it comes from: on top up top and in the middle, at the bottom down there.
+    const [placeRow, col] = (TOAST_PLACES.includes(VIEW.toastPlace) ? VIEW.toastPlace : "top-right").split("-");
+    const row = floating ? props()?.row ?? "top" : placeRow;
+    const live = all.filter((n) => n && n.at + n.timeout > now).slice(-3);
+    const list = row === "bottom" ? live : live.reverse();
     if (!list.length) return null;
     // Clicked or dismissed counts as read: it shows dimmed in the bell's list and leaves the bell's count.
     const drop = (id) => {
       setShared(KEY, (Array.isArray(shared(KEY)) ? shared(KEY) : []).filter((x) => x && x.id !== id));
       const log = Array.isArray(shared("veroboard.noticeLog")) ? shared("veroboard.noticeLog") : [];
-      if (log.some((x) => x && x.id === id && !x.read)) setShared("veroboard.noticeLog", log.map((x) => x && x.id === id ? { ...x, read: true } : x));
+      if (log.some((x) => x && x.id === id && (!x.read || x.unread))) setShared("veroboard.noticeLog", log.map((x) => x && x.id === id ? { ...x, read: true, unread: false } : x));
     };
     const DOT = { error: "blocked", warning: "working", success: "done", info: "accent" };
     // About an agent (enrichNotices): like a slim card (user, 2026-11-18): a stripe in the why's color; its name, why +
@@ -589,7 +618,7 @@ export default class Board extends View {
           .child(div().flex_1().min_w(0).truncate().font_semibold().text_size(13).text_color(t.foreground).child(g.name))
           // No age: a notice on the board is always "now" (user, 2026-11-18). The bell's list keeps it.
           .when(Boolean(g.why?.label), (el) => el.child(pill(g.why.label, g.why.color, alpha(g.why.color, "26"))))
-          .child(pill(g.address, t.muted, t.raised, true)))
+          .when(Boolean(g.address), (el) => el.child(pill(g.address, t.muted, t.raised, true))))
         .child(h_flex().h(16).flex_none().gap(5).items_center().overflow_hidden()
           .when(Boolean(g.space), (el) => el.child(pill(g.space, t.muted)))
           // As on the card: a branch in a linked worktree is blue with the layers icon.
@@ -601,7 +630,16 @@ export default class Board extends View {
     // The colored left edge follows the notice's rounded corners, like a CSS border-left on a rounded box (a square
     // stripe looked odd on a toast; user, 2026-11-18): the box is filled with the why's color, and the content sits 3px
     // in from the left on the popup's color, its own left corners rounded, so the color shows as a curved edge.
-    return v_flex().absolute().top(8).right(24).w(340).gap(8).children(list.map((n) => {
+    // In zoom-1 px, like the rest of the layout. Each notice is 62px (60 + its border), 8px apart; 24px off the sides
+    // (the lanes' margin), 8px off the top and bottom.
+    const zoom = Number(settings()?.zoom) || 1;
+    const W = (this.boardW ?? 0) / zoom, H = (this.boardH ?? 0) / zoom, stackH = list.length * 62 + (list.length - 1) * 8;
+    return v_flex().w(340).gap(8).when(!floating, (el) => el.absolute())
+      .when(!floating && row === "top", (el) => el.top(8)).when(!floating && row === "bottom", (el) => el.bottom(8))
+      .when(!floating && row === "middle", (el) => el.top(Math.max(8, (H - stackH) / 2)))
+      .when(!floating && col === "left", (el) => el.left(24)).when(!floating && col === "right", (el) => el.right(24))
+      .when(!floating && col === "center", (el) => el.left(Math.max(24, (W - 340) / 2)))
+      .children(list.map((n) => {
       const edge = n.agent?.name ? (n.agent.why?.color ?? t.accent) : null;
       // The light border sits on the popup's color (it's see-through; on the edge's color it tinted the whole outline),
       // so the colored layer is inside it.
@@ -618,6 +656,40 @@ export default class Board extends View {
             .on_mouse_down("left", (_e, cx) => cx.stop_propagation())
             .on_click((_e, cx) => { cx.stop_propagation(); drop(n.id); }).child("×"))));
     }));
+  }
+  // Notices over the terminal (toastArea "terminal"; user, 2026-11-18): a mod draws only inside its own block, so the
+  // board opens a copy of itself as a frameless window (role "toasts") over the terminal, sized to the stack, at
+  // toastPlace inside the terminal's pane. It doesn't take the keyboard. Its id is shared "veroboard.toastWin"; any
+  // other toasts window closes itself. When the notices, the spot or the sizes change, it's replaced; when there are
+  // none, or they go back on the board, it's closed. Runs every 200ms on the board copy; does nothing if nothing changed.
+  // Window px (Herdr's zoom scales the layout's and the mod's px, so those are multiplied by it). The terminal's pane:
+  // under the header (52), this block (its height + 1px border each side), the workspace's 10px padding, the tab
+  // strip (34) and a 10px gap, and its 28px header; 24px in from the window's sides and 10px off its bottom.
+  syncToastWindow() {
+    const id = shared("veroboard.toastWin"), now = Date.now();
+    const live = (Array.isArray(shared("veroboard.notices")) ? shared("veroboard.notices") : []).filter((n) => n && n.at + n.timeout > now).slice(-3);
+    let vp = null;
+    try { vp = globalThis.window.viewport_size(); } catch (_) { /* not drawn yet */ }
+    if (VIEW.toastArea !== "terminal" || !live.length || !this.rootH || !vp?.width) {
+      if (id) { closeOverlay(id); setShared("veroboard.toastWin", null); }
+      this.toastKey = null;
+      return;
+    }
+    const z = Number(settings()?.zoom) || 1, pad = 12 * z, w = 340 * z, stackH = (live.length * 62 + (live.length - 1) * 8) * z;
+    const [row, col] = (TOAST_PLACES.includes(VIEW.toastPlace) ? VIEW.toastPlace : "top-right").split("-");
+    const top = 52 * z + this.rootH + 2 + (10 + 34 + 10 + 28) * z, bottom = vp.height - 10 * z;
+    const left = 24 * z, right = vp.width - 24 * z;
+    // 16px in from the pane's sides, 10px from its top and bottom, like the board's margins.
+    const L = left + 16 * z, R = right - 16 * z, T = top + 10 * z, B = bottom - 10 * z;
+    const x = col === "left" ? L : col === "right" ? R - w : (L + R - w) / 2;
+    const y = row === "top" ? T : row === "bottom" ? B - stackH : (T + B - stackH) / 2;
+    const at = { x: Math.round(x - pad), y: Math.round(Math.max(T, y) - pad) };
+    const key = JSON.stringify([live.map((n) => n.id), at, row, vp.width, vp.height]);
+    if (key === this.toastKey && id) return;
+    this.toastKey = key;
+    if (id) closeOverlay(id);
+    setShared("veroboard.toastWin", openOverlay({ mod: "veroboard", kind: "window", frame: "none",
+      width: Math.round(w + 2 * pad), height: Math.round(stackH + 2 * pad), at, props: { role: "toasts", row } }));
   }
   groupFamilies(cards) {
     const at = new Map(cards.map((a, i) => [a.address, i]));
@@ -639,9 +711,16 @@ export default class Board extends View {
     for (const a of cards) walk(a); // a parent loop, should one ever occur
     return out;
   }
-  render() {
+  render(cx) {
     if (this.panel) return this.panel.render();
     const t = theme();
+    // The window over the terminal (syncToastWindow): just the notices, 12px in (room for their shadow). A press on it
+    // doesn't drag the window. A window the board has since replaced (or one left from before a reload) closes itself.
+    if (props()?.role === "toasts") {
+      const me = props()?.overlay;
+      if (me && shared("veroboard.toastWin") !== me && !this.closing) { this.closing = true; cx?.timer?.after(0, () => closeOverlay(me)); }
+      return div().size_full().p(12).on_mouse_down("left", (_e, cx) => cx.stop_propagation()).child(this.noticeStack(t, true) ?? div());
+    }
     // Herdr chimes when an agent turns done or blocked: note when each card last did, to make it glow.
     const statusNow = Object.fromEntries(agents().map(a => [a.address, a.status]));
     if (this.lastStatus && this.flashAt) for (const [addr, st] of Object.entries(statusNow))
@@ -750,12 +829,16 @@ export default class Board extends View {
           const sp = scope === "space" && active ? active : null;
           const all = (Array.isArray(shared("veroboard.noticeLog")) ? shared("veroboard.noticeLog") : []).filter(Boolean);
           const shown = all.filter((n) => noticeIn(n, sp));
-          const fresh = shown.filter(noticeUnread).map((n) => n.id);
-          if (fresh.length) setShared("veroboard.noticeLog", all.map((n) => (fresh.includes(n.id) ? { ...n, seen: true } : n)));
+          // Opening the list marks what it shows as read only with noticeRead "open" (user, 2026-11-18); else they stay
+          // unread until you click one, its ✓, Mark all read, or (with "visit") go to its agent.
+          const mode = ["open", "visit", "hand"].includes(VIEW.noticeRead) ? VIEW.noticeRead : "visit";
+          const unread = shown.filter(noticeUnread).map((n) => n.id);
+          const fresh = mode === "open" ? unread : [];
+          if (fresh.length) setShared("veroboard.noticeLog", all.map((n) => (fresh.includes(n.id) ? { ...n, seen: true, unread: false } : n)));
           // Exactly the popup's size: a 40px header, a 34px row of space chips (with more than one space), 4 to 7 rows
           // of 62px (+10 for the edge between new and read), a 1px border round it. The list keeps that height when you
           // pick another space; it scrolls. Keep in step with mods/veroboard-toast (ROW_H, LIST_MIN, LIST_MAX, EDGE_H).
-          const edge = fresh.length > 0 && fresh.length < shown.length ? 10 : 0;
+          const edge = unread.length > 0 && unread.length < shown.length ? 10 : 0;
           const listH = Math.max(4 * 62, Math.min(7 * 62, shown.length * 62 + edge));
           const bar = allSpaces.length > 1;
           const height = 40 + (bar ? 34 : 0) + listH + 2;
@@ -763,7 +846,7 @@ export default class Board extends View {
           const onLeft = (VIEW.top?.lines ?? []).some((l) => l.left.includes("bell"));
           const at = b ? { x: Math.max(0, onLeft ? b.x : b.x + b.width - 380), y: b.y + b.height + 8 } : undefined;
           openOverlay({ mod: "veroboard-toast", kind: "popup", width: 380, height, ...(at ? { at } : {}),
-            props: { view: "history", fresh, space: sp?.id ?? null, listH, bar, seenBefore: Number(shared("veroboard.noticesSeen")) || 0 } });
+            props: { view: "history", mode, fresh, space: sp?.id ?? null, listH, bar, seenBefore: Number(shared("veroboard.noticesSeen")) || 0 } });
         }),
       filter: h_flex().id("board-search").w(100).h(27).flex_none().px(9).gap(6).items_center().rounded(6)
         .tooltip("Matches anything on a card: name, id, model, effort, space, folder, branch, lane, why it's blocked, background work. Several words must all match.")
@@ -834,6 +917,7 @@ export default class Board extends View {
     const grip = h_flex().id("board-grip").h(11).flex_none().w_full().justify_center().items_center().cursor_pointer()
       .on_mouse_down("left", (e) => { if (e.click_count === 2) run("layout.resize", { id: "board-cards", px: BOARD_PX }); })
       .child(div().w(36).h(4).rounded(2).bg(t.border));
-    return v_flex().size_full().bg(t.canvas).child(columns).child(grip);
+    // Its height, for placing the notices over the terminal under it (syncToastWindow).
+    return v_flex().size_full().bg(t.canvas).on_size_change((sz) => { this.rootH = sz.height; }).child(columns).child(grip);
   }
 }
