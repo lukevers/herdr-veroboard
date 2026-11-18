@@ -1,4 +1,4 @@
-// Board settings: how the board looks (Display), what's on a card and where (Card), the rules that put a card in
+// Veroboard settings: how the board looks (Display), what's on a card and where (Card), the rules that put a card in
 // Blocked, and a box to test a message. Opened by the board header's gear: run("mod.open", { name: "veroboard" }) shows
 // this mod as the dialog its mod.json describes, and main.js hands an overlay copy to SettingsPanel. It lives in the
 // board mod so the Card tab's example is drawn by the board's own card code (card.js); mods can only import their own files.
@@ -39,7 +39,7 @@ const whyBadge = (t, label, color) => badge(t).bg(alpha(color, "26")).text_color
 const code = (t, text) => div().flex_none().px(5).rounded(4).bg(t.background).border(1).border_color(t.border).font_family(MONO).text_size(11).child(text);
 const sections = (t, list) => v_flex().children(list.map((el, i) => (i === 0 ? el : div().mt(28).pt(18).border_t(1).border_color(t.border).child(el))));
 const SKELETON = {
-  "//": "Your Herdr board rules: added to the package's defaults. Edited by the board's Board settings dialog (the gear), or by hand.",
+  "//": "Your Herdr board rules: added to the package's defaults. Edited by the board's Veroboard settings dialog (the gear), or by hand.",
   people: { names: [], notPeople: [] },
   blocked: { asks: [], notAsks: [], nothingForYou: [], todoLabels: [], patterns: { asks: [], notAsks: [] }, disable: [] },
 };
@@ -767,7 +767,7 @@ export class SettingsPanel {
     const t = theme();
     const off = listAt(this.user, ["blocked", "disable"]).length;
     const head = h_flex().h(44).flex_none().px(18).gap(10).items_center()
-      .child(div().text_size(15).font_semibold().text_color(t.foreground).child("Board settings"))
+      .child(div().text_size(15).font_semibold().text_color(t.foreground).child("Veroboard settings"))
       .child(div().flex_1().min_w(0).truncate().text_size(11).text_color(t.dim).child(this.info?.config ?? ""))
       .when(Boolean(this.info), (el) => el.child(h_flex().id("br-open").h(26).px(10).items_center().rounded(6).cursor_pointer()
         .bg(t.raised).border(1).border_color(t.border).text_size(11.5).text_color(t.foreground).hover((s) => s.bg(t.hover))

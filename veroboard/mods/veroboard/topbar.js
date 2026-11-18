@@ -1,5 +1,5 @@
 // The board's top bar: the space chips, the new-space button, the agent count, the status pie, the divider, the
-// settings gear and the filter box, each placed where Board settings → Board puts it (VIEW.top). main.js builds the
+// settings gear and the filter box, each placed where Veroboard settings → Board puts it (VIEW.top). main.js builds the
 // live pieces; the settings dialog builds look-alikes for its example. renderTopBar arranges either.
 import { div, svg, PathBuilder } from "gpui-kit";
 import { h_flex } from "gpui-base";
@@ -50,7 +50,7 @@ const newSpaceButton = (t) => h_flex().id("chip-new-space").size(27).flex_none()
   .bg(t.surface).border(1).border_color(t.border).text_size(14).text_color(t.muted)
   .hover((s) => s.bg(t.hover).text_color(t.foreground)).child("+");
 const gearButton = (t) => h_flex().id("board-settings").size(27).flex_none().items_center().justify_center().rounded(6).cursor_pointer()
-  .bg(t.surface).border(1).border_color(t.border).text_color(t.muted).tooltip("Board settings")
+  .bg(t.surface).border(1).border_color(t.border).text_color(t.muted).tooltip("Veroboard settings")
   .hover((s) => s.bg(t.hover).text_color(t.foreground))
   .child(svg("mods/workspace-chrome/settings.svg").size(13));
 // A short divider in the lane dividers' color (user, 2026-11-16).

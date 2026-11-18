@@ -2,7 +2,7 @@
 
 A Kanban board for your Claude Code agents, as a [Herdr](https://herdr.dev) layout.
 
-![Veroboard](preview.png)
+![Veroboard](veroboard/preview.png)
 
 - **Four lanes:** Blocked, Waiting, Working, Done.
 - **Patch cables** from an agent to the agents it opened.

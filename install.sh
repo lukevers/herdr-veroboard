@@ -25,9 +25,9 @@ STAMP="$(date +%Y%m%d-%H%M%S)"
 command -v node >/dev/null 2>&1 || { echo "Node.js is required (node not found)." >&2; exit 1; }
 [ -d "$APP" ] || { echo "Herdr's home ($APP) not found. Install and open the Herdr app first." >&2; exit 1; }
 
-# The Herdr files: package path → installed path (relative to herdr/ and $APP).
+# The Herdr files: package path → installed path (relative to veroboard/ and $APP).
 ITEMS=(layouts/veroboard.json mods/veroboard mods/veroboard-menu)
-differs() { [ -e "$APP/$1" ] && ! diff -rq "herdr/$1" "$APP/$1" >/dev/null 2>&1; }
+differs() { [ -e "$APP/$1" ] && ! diff -rq "veroboard/$1" "$APP/$1" >/dev/null 2>&1; }
 conflicts=()
 for it in "${ITEMS[@]}"; do differs "$it" && conflicts+=("$it"); done
 if [ ${#conflicts[@]} -gt 0 ] && [ $FORCE -eq 0 ]; then
@@ -54,13 +54,13 @@ for it in "${ITEMS[@]}"; do
   if [ -e "$APP/$it" ] && ! differs "$it"; then continue; fi
   if [ -e "$APP/$it" ]; then mv "$APP/$it" "$APP/$it.bak-$STAMP"; echo "Moved aside: $APP/$it.bak-$STAMP"; fi
   mkdir -p "$(dirname "$APP/$it")"
-  cp -R "herdr/$it" "$APP/$it"
+  cp -R "veroboard/$it" "$APP/$it"
   echo "Installed: $APP/$it"; changed=1
 done
 [ $changed -eq 1 ] || echo "Herdr files: already up to date."
 
 # 4. Keys: add the board's, keep yours.
-node - "$APP/keys.json" "$PKG/herdr/keys.veroboard.json" "$STAMP" <<'NODE'
+node - "$APP/keys.json" "$PKG/veroboard/keys.json" "$STAMP" <<'NODE'
 const fs = require('fs');
 const [file, pkgFile, stamp] = process.argv.slice(2);
 const add = JSON.parse(fs.readFileSync(pkgFile, 'utf8'))['layout:veroboard'] || {};

@@ -9,9 +9,9 @@ import {
 } from "./card.js";
 // The patch cables' drawing (shared with the settings dialog's example).
 import { cablePalette, cableLayers } from "./cables.js";
-// The top bar's pieces and how they're arranged (Board settings → Board).
+// The top bar's pieces and how they're arranged (Veroboard settings → Board).
 import { SYMBOL, hint, pie, chip, newSpaceButton, gearButton, dividerLine, renderTopBar } from "./topbar.js";
-// Board settings: this mod opened as a dialog (mod.open board) is the settings panel, not a board.
+// Veroboard settings: this mod opened as a dialog (mod.open veroboard) is the settings panel, not a board.
 import { SettingsPanel } from "./settings.js";
 import { agents, spaces, panes, terminals, props, run, openOverlay, setAgentOrder, theme, keys, nextCommand, shared, setShared, window, layout, readTextFile, watchFolder, home, settings, exec } from "herdr";
 
@@ -360,7 +360,7 @@ export default class Board extends View {
     const laneW = (W - 48 - 3 - 6 * 12) / 4;
     // The lane dividers, here so the cables cross over them (as flex children they painted on top and cut them).
     const dividers = [1, 2, 3].map(i => div().absolute().left(24 + i * (laneW + 25) - 13).top(17).w(1).h(H - 23).bg(line));
-    // Patch cables off (Board settings → Display): only the dividers.
+    // Patch cables off (Veroboard settings → Display): only the dividers.
     if (!VIEW.cables) return { back: div().absolute().inset_0().children(dividers), front: div() };
     const pos = {};
     lanes.forEach((cards, i) => {
@@ -475,13 +475,13 @@ export default class Board extends View {
     if (this.column(a) !== "blocked") return null;
     const w = this.awaiting(a);
     if (!w) return null;
-    // The hover names the rule that decided it (facts.js awaiting.rule), so a wrong lane can be fixed in Board settings (the gear).
+    // The hover names the rule that decided it (facts.js awaiting.rule), so a wrong lane can be fixed in Veroboard settings (the gear).
     const rule = typeof w.rule === "string" ? ` Rule: ${w.rule}${this.ruleWhy?.[w.rule] ? `: ${this.ruleWhy[w.rule]}` : ""}.` : "";
     return w.to === "you"
       ? { icon: "mods/workspace-chrome/clock.svg", label: "You", color: t.blocked, at: w.at,
-          tip: `Its last message asks you something.${rule} Wrong? Tune it in Board settings (the gear in the header).` }
+          tip: `Its last message asks you something.${rule} Wrong? Tune it in Veroboard settings (the gear in the header).` }
       : { icon: "mods/workspace-chrome/clock.svg", label: w.to, color: ELSEWHERE, at: w.at,
-          tip: `It says it waits on ${w.to}.${rule} Wrong? Tune it in Board settings (the gear in the header).` };
+          tip: `It says it waits on ${w.to}.${rule} Wrong? Tune it in Veroboard settings (the gear in the header).` };
   }
   awaiting(a) {
     const w = this.sessions?.[a.address]?.awaiting;
@@ -594,7 +594,7 @@ export default class Board extends View {
     // One row: room for the macOS window buttons (the layout's traffic_lights), then the space chips.
     const w = window(), lights = layout()?.traffic_lights;
     const left = w?.platform === "macos" && w.titlebar === "none" && !w.fullscreen && lights ? lights[0] + 68 : 26;
-    // The top bar: each piece built here, placed where Board settings → Board puts it (topbar.js renderTopBar).
+    // The top bar: each piece built here, placed where Veroboard settings → Board puts it (topbar.js renderTopBar).
     if (role === "header") return h_flex().size_full().bg(t.chrome).pl(left).pr(26).items_center().child(renderTopBar({
       // Wrapped: a scroll area grows to fill its row, which pushed the pieces after it (the +) to the far side. The
       // wrapper takes the chips' width, and shrinks (the chips then scroll) when the bar runs out of room.
@@ -615,7 +615,7 @@ export default class Board extends View {
         : scope === "space" && active ? `${count} in ${active.name}` : `${count} across ${allSpaces.length} space${allSpaces.length === 1 ? "" : "s"}`),
       pie: pulse(t, scoped.map(a => ({ key: col.get(a.address), unseen: a.status === "done" }))),
       divider: dividerLine(t),
-      // Board settings (settings.js, opened as this mod's dialog; user, 2026-11-17).
+      // Veroboard settings (settings.js, opened as this mod's dialog; user, 2026-11-17).
       gear: gearButton(t).on_click(() => run("mod.open", { name: "veroboard" })),
       filter: h_flex().id("board-search").w(100).h(27).flex_none().px(9).gap(6).items_center().rounded(6)
         .tooltip("Matches anything on a card: name, id, model, effort, space, folder, branch, lane, why it's blocked, background work. Several words must all match.")

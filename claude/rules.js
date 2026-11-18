@@ -164,7 +164,7 @@ function classify(text) {
 const awaitsAfterSend = (text) => on('send-wait') && typeof text === 'string' && AWAITS.test(text.slice(0, 240).replace(NOT_AWAITS, ''));
 
 // Every built-in rule: its group, what it looks for (what), more detail (more), and an example last message with the
-// verdict it gives (expect: "you", a name, or null for not blocked). The Board settings dialog shows these, the board's
+// verdict it gives (expect: "you", a name, or null for not blocked). The Veroboard settings dialog shows these, the board's
 // Blocked badge names the rule that decided a card, and tests/rules.test.js checks every example. Keep in step with
 // the checks above.
 const BUILTINS = [

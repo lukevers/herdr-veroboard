@@ -6,6 +6,9 @@ agent below.
 
 ![Veroboard](preview.png)
 
+This file is the brief: enough to build Veroboard from an empty folder. The files next to it are one build of it.
+If they don't work on your Herdr, or you want it different, build it again from here.
+
 ## What you see
 
 Top to bottom:
@@ -72,7 +75,7 @@ Top to bottom:
 ## Watch out
 
 - **The board needs the Claude Code side.** Copying the layout and mods alone gives cards with no model, context or
-  Blocked reasons. Run `./install.sh` from this repo and add its `~/.claude/settings.json` lines (see the README).
+  Blocked reasons. Run `./install.sh` from the repo root and add its `~/.claude/settings.json` lines (see the README).
 - Herdr runs programs without the shell's PATH. `facts.js` saves the path of the Node it runs under to
   `~/.claude/herdr/node-path`, and the mods use it. Until an agent has run once after install, the dialog can't load.
 - Mods can't import from another mod's folder, so the settings dialog lives inside `mods/veroboard`.
@@ -85,3 +88,13 @@ Top to bottom:
 - Drag and drop in the dialog is built from mouse down, move, hover and up events.
 - Limits: 8 shells and 8 monitors per card, 200 opened agents per agent; sub-agent rows drop after 30s without news.
 - Every color is a theme color except Waiting's light blue and the marigold for "waits on someone" (#f2bc78).
+- If `veroboard` is taken, rename the layout, both mods, the `layout:veroboard` keys section and the `veroboard.*`
+  shared keys before installing.
+
+## Done when
+
+- Every Claude Code agent shows up in the right lane, and each lane's count matches.
+- A card shows model, effort, context and branch within one status line run of the agent starting.
+- Clicking a card shows its tab's terminals; an agent that asks you something lands in Blocked with a reason.
+- An agent that opens another gets a cable to it.
+- `herdr-app check mods/veroboard` passes, the gear opens Veroboard settings, and switching layouts away and back works.

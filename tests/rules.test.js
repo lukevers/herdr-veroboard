@@ -37,7 +37,7 @@ const bad = run('{bad', `const g = r.classify('Tell me which.'); console.log(JSO
 const badOk = bad.n === 1 && bad.g === 'you/tell-me';
 if (!badOk) failed++;
 console.log(`${badOk ? 'ok  ' : 'FAIL'} invalid config → 1 error, defaults still work (${bad.g})`);
-// Every built-in rule's example (shown in the Board settings dialog) gives the verdict it documents; an example for a
+// Every built-in rule's example (shown in the Veroboard settings dialog) gives the verdict it documents; an example for a
 // rule that ignores or ends the check turns into an ask with that rule switched off.
 const ex = run({}, `console.log(JSON.stringify(r.BUILTINS.filter((b) => b.testable !== false).map((b) => { const g = r.classify(b.example); return [b.id, b.expect, g && g.to, g && g.rule]; })))`);
 for (const [id, expect, to, rule] of ex) {
@@ -50,9 +50,9 @@ for (const [id, expect] of ex.filter(([, expect]) => expect === null)) {
   if (off !== 'you') { failed++; console.log(`FAIL example ${id}: still not blocked with the rule off (${off})`); }
 }
 console.log(`ok   examples of rules that end the check or ignore a sentence depend on that rule`);
-// Dialog examples: each Asks and Patterns list in Board settings shows "if you add <phrase>, this message gives X; without it, Y".
+// Dialog examples: each Asks and Patterns list in Veroboard settings shows "if you add <phrase>, this message gives X; without it, Y".
 // They're read from the dialog's own source, so a wording change there is checked here.
-const SETTINGS = fs.readFileSync(path.join(__dirname, '..', 'herdr', 'mods', 'veroboard', 'settings.js'), 'utf8');
+const SETTINGS = fs.readFileSync(path.join(__dirname, '..', 'veroboard', 'mods', 'veroboard', 'settings.js'), 'utf8');
 const examples = [...SETTINGS.matchAll(/key: (\[[^\]]+\])[^\n]*\n[^\n]*\n\s*example: (\{[^\n]*\}) \},/g)]
   .map((m) => ({ key: JSON.parse(m[1]), ex: Function(`return ${m[2]}`)() }));
 if (examples.length !== 6) { failed++; console.log(`FAIL dialog examples: found ${examples.length}, want 6`); }

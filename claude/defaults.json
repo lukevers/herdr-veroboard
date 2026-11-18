@@ -38,7 +38,7 @@
     "disable": []
   },
   "board": {
-    "//": "How the board looks and behaves (Board settings → Display). Theme colors come from your Herdr theme. Your config's \"board\" section overrides any of these.",
+    "//": "How the board looks and behaves (Veroboard settings → Display). Theme colors come from your Herdr theme. Your config's \"board\" section overrides any of these.",
     "cables": true,
     "//cablesThroughCards": "How much the patch cables show through the cards, in % (0 to 50).",
     "cablesThroughCards": 5,
@@ -53,7 +53,7 @@
     "greyWhenSeen": true,
     "doneTimer": true,
     "activeRing": true,
-    "//card": "What each card shows and where (Board settings → Card): three lines, each with a left and right side; hidden badges; rows: the background work rows under a card.",
+    "//card": "What each card shows and where (Veroboard settings → Card): three lines, each with a left and right side; hidden badges; rows: the background work rows under a card.",
     "card": {
       "lines": [
         {
@@ -90,7 +90,7 @@
       ],
       "rows": true
     },
-    "//top": "The top bar (Board settings → Board): one line with a left and right side, and hidden items. The gear can't be hidden.",
+    "//top": "The top bar (Veroboard settings → Board): one line with a left and right side, and hidden items. The gear can't be hidden.",
     "top": {
       "lines": [
         {

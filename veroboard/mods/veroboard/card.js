@@ -1,11 +1,11 @@
-// The board's card: what's on it and where (Board settings → Card), its badges and colors, and the display settings
+// The board's card: what's on it and where (Veroboard settings → Card), its badges and colors, and the display settings
 // that change how it looks. main.js renders the real cards with renderCard(); the settings dialog (settings.js) renders
 // a made-up example with the same code, so the example is exactly what the board shows. Mods can only import their own
 // files, which is why the dialog lives in this mod too.
 import { div, svg, image } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
 
-// The board's display settings (Board settings → Display; user, 2026-11-17): the package's defaults.json "board"
+// The board's display settings (Veroboard settings → Display; user, 2026-11-17): the package's defaults.json "board"
 // section, then yours from ~/.config/veroboard/config.json. Theme colors stay the theme's. Every copy loads them
 // (loadView) and reloads when the folder changes. These fallbacks match the package defaults.
 const VIEW_DEFAULTS = { cables: true, cablesThroughCards: 5, contextRamp: [50, 85], stuckMinutes: 15, glow: true, greyWhenSeen: true, doneTimer: true, activeRing: true, card: null, top: null };
@@ -138,7 +138,7 @@ const icon = (t, program, size = 18) => program?.icon
 // The board reads the settings once per copy and again when they change (main.js loadView).
 const setView = (v) => { VIEW = v; };
 
-// ---------- The card's layout (Board settings → Card; user, 2026-11-17) ----------
+// ---------- The card's layout (Veroboard settings → Card; user, 2026-11-17) ----------
 // Three lines, each with a left side (it shrinks first, and truncates) and a right side. The agent's icon and name
 // always start line 1. Every other badge can be moved to any line and side, in any order, or hidden.
 const CARD_ITEMS = [
@@ -193,7 +193,7 @@ const makeLayout = (c, items, def) => {
 };
 const cardLayout = (c) => ({ ...makeLayout(c, CARD_ITEMS, CARD_DEFAULT), rows: !(c && typeof c === "object" && c.rows === false) });
 
-// ---------- The top bar's layout (Board settings → Board; user, 2026-11-17) ----------
+// ---------- The top bar's layout (Veroboard settings → Board; user, 2026-11-17) ----------
 // One line with a left and a right side (a gap between takes what's left), like a card's. The gear can't be hidden:
 // it's the way back into these settings.
 const TOP_ITEMS = [
