@@ -440,7 +440,12 @@ export default class Board extends View {
       shadows.push(...c2.shadows); bodies.push(...c2.bodies); jacks.push(...c2.jacks);
     }
     // `back` goes under the lanes (cards hide the cable), `front` over them: the plugs stay visible on the card edges.
-    return { back: div().absolute().inset_0().children([...dividers, ...shadows, ...bodies]), front: div().absolute().inset_0().children(jacks) };
+    // The cables are cut off at the top of the lanes' cards (53: under the lane headers), where a card scrolled up out of
+    // its lane is cut off too, so a cable to it goes under the header row instead of over it (user, 2026-11-18). The
+    // clip starts at 53; the cables inside are moved back up 53, so their coordinates stay the board's.
+    const clipped = div().absolute().left(0).right(0).top(53).bottom(0).overflow_hidden()
+      .child(div().absolute().left(0).top(-53).w(W).h(H).children([...shadows, ...bodies]));
+    return { back: div().absolute().inset_0().children(dividers).child(clipped), front: div().absolute().inset_0().children(jacks) };
   }
   // The agent's column: Herdr's blocked and working as they are; otherwise waiting while something it
   // started is still running (a live monitor, a sub-agent, an hc helper terminal, a background shell that
