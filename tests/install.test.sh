@@ -21,8 +21,8 @@ check "second run keeps your rules file" '"$PKG/install.sh" >/dev/null 2>&1 && g
 echo "// my edit" >> "$APP/mods/veroboard/main.js"
 check "refuses to overwrite your changed mod" '! "$PKG/install.sh" >/dev/null 2>&1 && grep -q "my edit" "$APP/mods/veroboard/main.js"'
 check "--force moves it aside and installs" '"$PKG/install.sh" --force >/dev/null 2>&1 && ls -d "$APP"/mods/veroboard.bak-* >/dev/null 2>&1 && ! grep -q "my edit" "$APP/mods/veroboard/main.js"'
-check "tap.js writes facts and passes output through" 'out2=$(echo "{\"workspace\":{\"current_dir\":\"$HOME\"}}" | HC_TERMINAL_ID=tt1 node "$HOME/.claude/veroboard/tap.js" -- "echo hello") && [ "$out2" = hello ] && [ -f "$HOME/.claude/herdr/sessions/tt1.json" ]'
-check "facts.js records where node is" '[ "$(cat "$HOME/.claude/herdr/node-path")" = "$(command -v node)" ] || [ -x "$(cat "$HOME/.claude/herdr/node-path")" ]'
+check "tap.js writes facts and passes output through" 'out2=$(echo "{\"workspace\":{\"current_dir\":\"$HOME\"}}" | HC_TERMINAL_ID=tt1 node "$HOME/.claude/veroboard/tap.js" -- "echo hello") && [ "$out2" = hello ] && [ -f "$HOME/.config/veroboard/state/sessions/tt1.json" ]'
+check "facts.js records where node is" '[ "$(cat "$HOME/.config/veroboard/state/node-path")" = "$(command -v node)" ] || [ -x "$(cat "$HOME/.config/veroboard/state/node-path")" ]'
 check "classify.js answers" '[ "$(node "$HOME/.claude/veroboard/classify.js" "Done. Tell me which." | node -e "let s=\"\";process.stdin.on(\"data\",d=>s+=d).on(\"end\",()=>console.log(JSON.parse(s).result.rule))")" = tell-me ]'
-check "ping.sh writes a ping" 'HC_TERMINAL_ID=tt1 sh "$HOME/.claude/veroboard/ping.sh" && [ -f "$HOME/.claude/herdr/pings/tt1.json" ]'
+check "ping.sh writes a ping" 'HC_TERMINAL_ID=tt1 sh "$HOME/.claude/veroboard/ping.sh" && [ -f "$HOME/.config/veroboard/state/pings/tt1.json" ]'
 [ $fail -eq 0 ] && echo "all passed" || { echo "some failed"; exit 1; }

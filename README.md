@@ -46,11 +46,13 @@ Use the gear. Changes save to `~/.config/veroboard/config.json`; see `config.exa
 ## How it works
 
 `tap.js` wraps your status line. Each run, it records the agent's context, model, git state, background work and
-whether it's waiting on someone, in `~/.claude/herdr/sessions/`. The board reads those files. `ping.sh` notes when an
+whether it's waiting on someone, in `~/.config/veroboard/state/sessions/`. The board reads those files. `ping.sh` notes when an
 agent finishes or asks for attention.
 
 ## Limits
 
+- Claude Code only for now. Other agents Herdr runs, like Codex, show up as basic cards: lane, name and folder,
+  without model, context, Blocked reasons or cables.
 - The Blocked rules were tuned on one person's agents. Expect some cards in the wrong lane, and tune the rules.
 - A card updates when Claude Code reruns the status line, so an idle agent can lag a little.
 

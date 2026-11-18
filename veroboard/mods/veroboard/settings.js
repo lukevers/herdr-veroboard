@@ -158,7 +158,7 @@ export class SettingsPanel {
 
   // Node's path, as the board package's facts.js recorded it: Herdr's exec doesn't see the shell's PATH (nvm, mise).
   async node() {
-    if (!this.nodeBin) { try { this.nodeBin = (await readTextFile(`${home()}/.claude/herdr/node-path`)).trim(); } catch { this.nodeBin = "node"; } }
+    if (!this.nodeBin) { try { this.nodeBin = (await readTextFile(`${home()}/.config/veroboard/state/node-path`)).trim(); } catch { this.nodeBin = "node"; } }
     return this.nodeBin || "node";
   }
 

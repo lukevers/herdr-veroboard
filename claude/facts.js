@@ -2,7 +2,7 @@
 'use strict';
 /*
  * Herdr board facts: what the board shows on a Claude Code session's card, written to
- * ~/.claude/herdr/sessions/<herdr terminal>.json (only when something changed; atomic).
+ * ~/.config/veroboard/state/sessions/<herdr terminal>.json (only when something changed; atomic).
  *
  *   context: pct, tokens, window; model, effort; git counts and worktree
  *   shellList / monitorList: background shells and monitors still running (from the transcript)
@@ -17,14 +17,14 @@ const fs = require('fs');
 const { execSync } = require('child_process');
 
 // Which node runs this, for the board's mods: Herdr's exec doesn't get the shell's PATH (nvm, mise), so they
-// read the path from ~/.claude/herdr/node-path. Written only when it changes.
+// read the path from ~/.config/veroboard/state/node-path. Written only when it changes.
 function noteNode() {
   try {
-    const file = `${process.env.HOME}/.claude/herdr/node-path`;
+    const file = `${process.env.HOME}/.config/veroboard/state/node-path`;
     let prev = '';
     try { prev = fs.readFileSync(file, 'utf8').trim(); } catch (_) {}
     if (prev !== process.execPath) {
-      fs.mkdirSync(`${process.env.HOME}/.claude/herdr`, { recursive: true });
+      fs.mkdirSync(`${process.env.HOME}/.config/veroboard/state`, { recursive: true });
       fs.writeFileSync(file, process.execPath + '\n');
     }
   } catch (_) {}
@@ -394,7 +394,7 @@ function awaitingReply(path) {
 }
 if (/^[A-Za-z0-9_-]+$/.test(herdrId)) {
   try {
-    const dir = `${process.env.HOME}/.claude/herdr/sessions`;
+    const dir = `${process.env.HOME}/.config/veroboard/state/sessions`;
     const file = `${dir}/${herdrId}.json`;
     // window: the context window's size in tokens (Claude Code's, else the 1M/200k guess above)
     const window = num(cw.context_window_size)

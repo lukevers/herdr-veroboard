@@ -33,7 +33,7 @@ const stateColor = (t, key) => key === "waiting" ? WAITING : t[key];
 // (VIEW.stuckMinutes, 15 by default: stuckMs())
 // A card glows (one pulse) this long after its agent makes a sound: Herdr's chime, which plays when an agent turns
 // done (finished while you weren't looking) or blocked, or a Claude Code hook's sound, which writes a ping file
-// (~/.claude/herdr/pings/<terminal>.json, {"at": ms}) next to playing it.
+// (~/.config/veroboard/state/pings/<terminal>.json, {"at": ms}) next to playing it.
 const FLASH_MS = 1000; // one pulse: fades in, peaks at 500ms, gone at 1000ms (4s, then 2s, were too long)
 // The header pie's Waiting slice: the same blue hue, darker (lightness 73% → 58%), so it stands apart
 // from the pastel slices beside it at 18px. The column itself keeps WAITING.
@@ -112,7 +112,7 @@ export default class Board extends View {
     if (!props()?.role) cx.spawn(async (cx) => {
       try {
         // Node's path as facts.js recorded it: Herdr's exec doesn't see the shell's PATH (nvm, mise).
-        const node = await readTextFile(`${home()}/.claude/herdr/node-path`).then(x => x.trim(), () => "node");
+        const node = await readTextFile(`${home()}/.config/veroboard/state/node-path`).then(x => x.trim(), () => "node");
         const r = await exec(node || "node", [`${home()}/.claude/veroboard/classify.js`, "--info"], { timeout: 10000 });
         this.ruleWhy = Object.fromEntries((JSON.parse(r.stdout).builtins ?? []).map(b => Array.isArray(b) ? b : [b.id, b.what]));
         cx.notify();
@@ -135,13 +135,13 @@ export default class Board extends View {
       cx.timer.every(33, (cx) => { if (Object.values(this.flashAt).some(at => Date.now() - at < FLASH_MS + 100)) cx.notify(); });
       cx.spawn(async (cx) => {
         for (;;) {
-          try { await watchFolder(`${home()}/.claude/herdr/pings`); } catch { break; }
+          try { await watchFolder(`${home()}/.config/veroboard/state/pings`); } catch { break; }
           await this.reload();
           cx.notify();
         }
       });
       // Tasks come from ~/.claude/subagents-herdr.js, a Claude Code subagentStatusLine hook.
-      const dir = `${home()}/.claude/herdr/subagents`;
+      const dir = `${home()}/.config/veroboard/state/subagents`;
       cx.spawn(async (cx) => {
         await this.reload();
         cx.notify();
@@ -154,7 +154,7 @@ export default class Board extends View {
       });
       cx.spawn(async (cx) => {
         for (;;) {
-          try { await watchFolder(`${home()}/.claude/herdr/sessions`); } catch { break; }
+          try { await watchFolder(`${home()}/.config/veroboard/state/sessions`); } catch { break; }
           await this.reload();
           cx.notify();
         }
@@ -173,19 +173,19 @@ export default class Board extends View {
       if (!/^[A-Za-z0-9_-]+$/.test(address)) continue;
 
       try {
-        const { running, at, tasks } = JSON.parse(await readTextFile(`${home()}/.claude/herdr/subagents/${address}.json`));
+        const { running, at, tasks } = JSON.parse(await readTextFile(`${home()}/.config/veroboard/state/subagents/${address}.json`));
         if (Number.isFinite(running) && Number.isFinite(at)) subs[address] = { running, at,
           tasks: Array.isArray(tasks) ? tasks.filter(x => x && typeof x === "object").slice(0, 8) : [] };
       } catch {}
 
       try {
-        const { at } = JSON.parse(await readTextFile(`${home()}/.claude/herdr/pings/${address}.json`));
+        const { at } = JSON.parse(await readTextFile(`${home()}/.config/veroboard/state/pings/${address}.json`));
         if (Number.isFinite(at)) pings[address] = at;
       } catch {}
 
       // ~/.claude/veroboard/facts.js writes the sessions file.
       try {
-        const { pct, tokens, model, effort, window, shells, shellList, monitorList, launched, git, worktree, lastPrompt, awaiting } = JSON.parse(await readTextFile(`${home()}/.claude/herdr/sessions/${address}.json`));
+        const { pct, tokens, model, effort, window, shells, shellList, monitorList, launched, git, worktree, lastPrompt, awaiting } = JSON.parse(await readTextFile(`${home()}/.config/veroboard/state/sessions/${address}.json`));
         if (Number.isFinite(pct) && Number.isFinite(tokens) && typeof model === "string") {
           let parsedGit = null;
           try {
@@ -569,7 +569,7 @@ export default class Board extends View {
     const col = new Map(scoped.map(a => [a.address, this.column(a)]));
     // How long each card has sat in Done (user, 2026-11-16): the cards copy notes when one arrives, in shared
     // "veroboard.doneSince" so a reload keeps the clocks. A card already in Done when the board starts takes its last
-    // Stop/Notification ping (~/.claude/herdr/pings), else now. Leaving Done or closing clears it. Written only on a change.
+    // Stop/Notification ping (~/.config/veroboard/state/pings), else now. Leaving Done or closing clears it. Written only on a change.
     if (!role && this.pings) {
       const next = { ...(shared("veroboard.doneSince") ?? {}) };
       let changed = false;

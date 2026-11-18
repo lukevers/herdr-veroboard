@@ -2,7 +2,7 @@
 /*
  * Claude Code subagentStatusLine -> Herdr board.
  * Counts this session's running sub-agents and saves the count where the Herdr
- * board mod reads it: ~/.claude/herdr/subagents/<herdr terminal>.json.
+ * board mod reads it: ~/.config/veroboard/state/subagents/<herdr terminal>.json.
  * Prints nothing, so Claude Code keeps its own sub-agent rows unchanged.
  */
 
@@ -27,7 +27,7 @@ const running = list.length;
 
 // Write when anything shown changes, or every 10s so the board can tell fresh from stale.
 try {
-  const dir = `${process.env.HOME}/.claude/herdr/subagents`;
+  const dir = `${process.env.HOME}/.config/veroboard/state/subagents`;
   const file = `${dir}/${id}.json`;
   let prev = null;
   try { prev = JSON.parse(fs.readFileSync(file, 'utf8')); } catch (_) {}

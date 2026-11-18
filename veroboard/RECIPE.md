@@ -65,11 +65,11 @@ Top to bottom:
   `openOverlay`, `setAgentOrder`, `readTextFile`, `writeTextFile`, `watchFolder`, `exec`; commands `agent.focus`,
   `tab.select`, `tab.rename`, `space.new`, `space.select`, `layout.resize`, `mod.open`.
 - **Claude Code side** (`claude/` in this repo, installed to `~/.claude/veroboard/`): `tap.js` wraps the status line and
-  writes each agent's facts to `~/.claude/herdr/sessions/<terminal>.json`; `subagents.js` (the sub-agent status line)
+  writes each agent's facts to `~/.config/veroboard/state/sessions/<terminal>.json`; `subagents.js` (the sub-agent status line)
   writes `subagents/`; `ping.sh` (Stop and Notification hooks) writes `pings/`; `rules.js` + `defaults.json` are the
   Blocked rules; `classify.js` tests a message.
 - **Programs and files outside the mod folder:** runs `node` (`classify.js`, for the dialog and the rules' hover text);
-  reads `~/.claude/herdr/`, `~/.claude/veroboard/defaults.json` and `~/.config/veroboard/config.json`; the dialog writes
+  reads `~/.config/veroboard/state/`, `~/.claude/veroboard/defaults.json` and `~/.config/veroboard/config.json`; the dialog writes
   that config file.
 
 ## Watch out
@@ -77,7 +77,7 @@ Top to bottom:
 - **The board needs the Claude Code side.** Copying the layout and mods alone gives cards with no model, context or
   Blocked reasons. Run `./install.sh` from the repo root and add its `~/.claude/settings.json` lines (see the README).
 - Herdr runs programs without the shell's PATH. `facts.js` saves the path of the Node it runs under to
-  `~/.claude/herdr/node-path`, and the mods use it. Until an agent has run once after install, the dialog can't load.
+  `~/.config/veroboard/state/node-path`, and the mods use it. Until an agent has run once after install, the dialog can't load.
 - Mods can't import from another mod's folder, so the settings dialog lives inside `mods/veroboard`.
 - `herdr-app check` doesn't build the dialog. Open it to test it.
 - Card and cable positions are computed from the layout's numbers (lane padding, 27px header, 76px cards, 22px rows,
