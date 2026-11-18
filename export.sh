@@ -7,7 +7,7 @@ APP="$HOME/.config/herdr-app"
 # veroboard/ also holds RECIPE.md and preview.png, so only its copied parts are replaced.
 rm -rf core adapters veroboard/layouts veroboard/mods veroboard/keys.json
 mkdir -p core adapters veroboard/layouts veroboard/mods/veroboard veroboard/mods/veroboard-menu
-cp "$VB"/core/{rules.js,defaults.json,classify.js,session.js} core/
+cp "$VB"/core/{rules.js,defaults.json,classify.js,session.js,launch-guard.sh,launch-guard.js} core/
 cp -R "$VB/adapters/." adapters/
 cp "$APP/layouts/veroboard.json" veroboard/layouts/
 cp "$APP"/mods/veroboard/{main.js,card.js,topbar.js,cables.js,settings.js,names.js,mod.json,launched-by.svg,launched.svg,preview.svg,question.svg} veroboard/mods/veroboard/

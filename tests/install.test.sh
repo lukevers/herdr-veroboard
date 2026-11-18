@@ -9,6 +9,8 @@ mkdir -p "$APP"
 printf '{"global":{"cmd-t":"tab.new"},"layout:veroboard":{"cmd-f":"something.else"}}' > "$APP/keys.json"
 fail=0; check() { if eval "$2"; then echo "ok   $1"; else echo "FAIL $1"; fail=1; fi; }
 out="$("$PKG/install.sh" 2>&1)"
+check "launch guard installed executable" '[ -x "$HOME/.config/veroboard/core/launch-guard.sh" ] && [ -f "$HOME/.config/veroboard/core/launch-guard.js" ] && [ -f "$HOME/.config/veroboard/adapters/codex/terminal.js" ]'
+check "Claude launch guard snippet printed" 'grep -Fq "sh ~/.config/veroboard/core/launch-guard.sh claude" <<<"$out" && grep -Fq "PreToolUse" <<<"$out"'
 check "claude scripts installed" '[ -f "$HOME/.config/veroboard/adapters/claude/facts.js" ] && [ -x "$HOME/.config/veroboard/adapters/claude/tap.js" ] && [ -x "$HOME/.config/veroboard/adapters/claude/ping.sh" ]'
 check "rules file created" '[ -f "$HOME/.config/veroboard/config.json" ]'
 check "layout and mods installed" '[ -f "$APP/layouts/veroboard.json" ] && [ -f "$APP/mods/veroboard/main.js" ] && [ -f "$APP/mods/veroboard-menu/main.js" ] && [ -f "$APP/mods/veroboard/card.js" ] && [ -f "$APP/mods/veroboard/topbar.js" ] && [ -f "$APP/mods/veroboard/cables.js" ] && [ -f "$APP/mods/veroboard/settings.js" ]'
@@ -31,17 +33,51 @@ check "--help documents --codex" '"$PKG/install.sh" --help | grep -q -- --codex'
 check "no Codex config created without --codex" '[ ! -e "$HOME/.codex" ]'
 check "--codex installs hooks" '"$PKG/install.sh" --codex >/dev/null 2>&1 && [ -x "$HOME/.config/veroboard/adapters/codex/hook.js" ]'
 check "Codex hooks contain all six events" 'node -e '\''const h=require(process.env.HOME+"/.codex/hooks.json").hooks; const events=["SessionStart","UserPromptSubmit","PostToolUse","PermissionRequest","Stop","Interrupt"]; process.exit(events.every(e=>h[e].length===1&&h[e][0].hooks.length===1&&h[e][0].hooks[0].type==="command"&&h[e][0].hooks[0].command==="node ~/.config/veroboard/adapters/codex/hook.js"&&h[e][0].hooks[0].timeout===5)?0:1)'\'''
+guard_once() {
+  node <<'NODE'
+const assert = require('assert');
+const hooks = require(process.env.HOME + '/.codex/hooks.json').hooks;
+assert.deepStrictEqual(hooks.PreToolUse, [{ matcher: 'Bash', hooks: [{ type: 'command',
+  command: 'sh ~/.config/veroboard/core/launch-guard.sh codex', timeout: 5 }] }]);
+NODE
+}
+check "--codex adds PreToolUse launch guard once" 'guard_once'
 cp "$HOME/.codex/hooks.json" "$HOME/hooks-first.json"
 check "second --codex run adds nothing" '"$PKG/install.sh" --codex >/dev/null 2>&1 && cmp -s "$HOME/hooks-first.json" "$HOME/.codex/hooks.json" && ! ls "$HOME/.codex/"hooks.json.bak-* >/dev/null 2>&1'
+check "second --codex run keeps one launch guard" 'guard_once'
 cat > "$HOME/.codex/hooks.json" <<'JSON'
-{"other":"keep","hooks":{"Stop":[{"matcher":"*","hooks":[{"type":"command","command":"herdr-foreign-hook","timeout":42}]}],"OtherEvent":[{"hooks":[{"type":"command","command":"another-hook"}]}]}}
+{"other":"keep","hooks":{"PreToolUse":[{"matcher":"OtherTool","hooks":[{"type":"command","command":"foreign-pre-hook","timeout":42}]}],"Stop":[{"matcher":"*","hooks":[{"type":"command","command":"herdr-foreign-hook","timeout":42}]}],"OtherEvent":[{"hooks":[{"type":"command","command":"another-hook"}]}]}}
 JSON
 cp "$HOME/.codex/hooks.json" "$HOME/hooks-foreign.json"
 check "--codex merges with foreign hooks" '"$PKG/install.sh" --codex >/dev/null 2>&1'
+foreign_pre_kept() {
+  node <<'NODE'
+const assert = require('assert');
+const before = require(process.env.HOME + '/hooks-foreign.json').hooks.PreToolUse;
+const after = require(process.env.HOME + '/.codex/hooks.json').hooks.PreToolUse;
+assert.deepStrictEqual(after[0], before[0]);
+assert.strictEqual(after.length, 2);
+assert.strictEqual(after[1].hooks[0].command, 'sh ~/.config/veroboard/core/launch-guard.sh codex');
+NODE
+}
+check "foreign PreToolUse entry is unchanged and first" 'foreign_pre_kept'
 check "foreign hook entries are unchanged and first" 'node -e '\''const fs=require("fs"),a=JSON.parse(fs.readFileSync(process.env.HOME+"/hooks-foreign.json")),b=require(process.env.HOME+"/.codex/hooks.json"); process.exit(b.other===a.other&&JSON.stringify(a.hooks.Stop[0])===JSON.stringify(b.hooks.Stop[0])&&b.hooks.Stop.length===2&&JSON.stringify(a.hooks.OtherEvent)===JSON.stringify(b.hooks.OtherEvent)?0:1)'\'''
 check "existing hooks.json backed up before merge" 'cmp -s "$HOME/hooks-foreign.json" "$HOME/.codex/"hooks.json.bak-*'
 out3="$("$PKG/install.sh" --codex 2>&1)"
 check "Codex feature reminder printed without changing config.toml" 'grep -Fq "[features] hooks = true" <<<"$out3" && [ ! -e "$HOME/.codex/config.toml" ]'
 out4="$("$PKG/install.sh" 2>&1)"
 check "normal install hints when .codex exists" 'grep -Fq "./install.sh --codex adds the Codex hooks" <<<"$out4"'
+cat > "$HOME/.codex/hooks.json" <<'JSON'
+{"hooks":{"PreToolUse":[{"matcher":"Custom","hooks":[{"type":"command","command":"foreign"},{"type":"command","command":"custom-wrapper ~/.config/veroboard/core/launch-guard.sh codex","timeout":42}]}]}}
+JSON
+cp "$HOME/.codex/hooks.json" "$HOME/hooks-custom.json"
+custom_guard_kept() {
+  "$PKG/install.sh" --codex >/dev/null 2>&1 && node <<'NODE'
+const assert = require('assert');
+const before = require(process.env.HOME + '/hooks-custom.json');
+const after = require(process.env.HOME + '/.codex/hooks.json');
+assert.deepStrictEqual(after.hooks.PreToolUse, before.hooks.PreToolUse);
+NODE
+}
+check "--codex preserves a launch guard anywhere in the event" 'custom_guard_kept'
 [ $fail -eq 0 ] && echo "all passed" || { echo "some failed"; exit 1; }

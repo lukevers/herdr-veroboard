@@ -9,6 +9,7 @@ A Kanban board for your Claude Code and Codex agents, as a [Herdr](https://herdr
 - **Blocked says why:** a question for you, an open dialog, or who it's waiting on.
 - **⌘F** filters by anything on a card. **⌘1–⌘9** pick a space.
 - **Right-click** a card to pin it to Blocked or move it to Done.
+- **Child agents stay in their parent's space:** an agent's new tab opens next to it, not in the space you're viewing.
 - **The gear** opens settings: arrange the card and top bar, tune the Blocked rules, test a message.
 
 ## Install
@@ -33,7 +34,8 @@ Then add this to `~/.claude/settings.json`, merging the hooks into yours. Put yo
   "subagentStatusLine": { "type": "command", "command": "node ~/.config/veroboard/adapters/claude/subagents.js" },
   "hooks": {
     "Stop": [{ "hooks": [{ "type": "command", "command": "sh ~/.config/veroboard/adapters/claude/ping.sh", "timeout": 5 }] }],
-    "Notification": [{ "hooks": [{ "type": "command", "command": "sh ~/.config/veroboard/adapters/claude/ping.sh", "timeout": 5 }] }]
+    "Notification": [{ "hooks": [{ "type": "command", "command": "sh ~/.config/veroboard/adapters/claude/ping.sh", "timeout": 5 }] }],
+    "PreToolUse": [{ "matcher": "Bash", "hooks": [{ "type": "command", "command": "sh ~/.config/veroboard/core/launch-guard.sh claude", "timeout": 5 }] }]
   }
 }
 ```
@@ -57,10 +59,19 @@ agent finishes or asks for attention. For Codex, `adapters/codex/hook.js` writes
 session log. It only writes for a Herdr terminal that runs Codex in the session's folder, so Codex run by another agent
 never touches that agent's card.
 
+### Launch guard
+
+Herdr opens a new tab in the space you're looking at. So when an agent opens a tab for another agent while you view a
+different space, the child lands there. The `PreToolUse` hook (`core/launch-guard.sh`, for Claude and Codex) blocks a
+`herdr-app do tab.new` without a space and tells the agent its own space id; the agent retries with it. If you ask for
+another space, the agent passes that one. Every other command exits in under 5 ms, untouched.
+
 ## Limits
 
 - Codex cards have no Waiting lane, background rows or sub-agent rows yet. A Codex card updates on its hooks (each
   prompt, tool call and stop), not continuously.
+- Codex's sandbox blocks Herdr's socket, so a Codex agent asks you before each `herdr-app do` (opening tabs for
+  other agents).
 - Other agents Herdr runs show up as basic cards: lane, name and folder.
 - The Blocked rules were tuned on one person's agents. Expect some cards in the wrong lane, and tune the rules.
 - A card updates when Claude Code reruns the status line, so an idle agent can lag a little.

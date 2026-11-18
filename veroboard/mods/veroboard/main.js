@@ -121,11 +121,17 @@ export default class Board extends View {
     if (!props()?.role || props()?.role === "header") {
       this.subs = {};
       // Display settings: load now, then again whenever ~/.config/veroboard changes (the dialog saves there).
+      // Only config.json and core/ matter: state/ (sessions, pings) changes all the time and is read elsewhere. A batch
+      // with the root, or an empty one (a reclaimed watch), reloads everything. A failed watch retries in 5s: ending
+      // the loop there kept a stale view, with the top bar out of order (2026-11-18).
       cx.spawn(async (cx) => {
-        for (;;) {
-          await this.loadView();
-          cx.notify();
-          try { await watchFolder(`${home()}/.config/veroboard`); } catch (_) { return; }
+        const dir = `${home()}/.config/veroboard`;
+        for (let reload = true;;) {
+          if (reload) { await this.loadView(); cx.notify(); }
+          try {
+            const paths = await watchFolder(dir);
+            reload = !Array.isArray(paths) || !paths.length || paths.some((p) => p === dir || /\/(config\.json|core\/)/.test(p));
+          } catch (_) { await cx.sleep(5000); reload = true; }
         }
       });
       this.sessions = {};

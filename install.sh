@@ -44,6 +44,7 @@ fi
 # 1. The rules (core) and the agent adapters: always the package's copy.
 mkdir -p "$VB/core" "$VB/adapters"
 cp core/* "$VB/core/"
+chmod +x "$VB/core/launch-guard.sh"
 for a in adapters/*/; do a="${a%/}"; rm -rf "$VB/$a"; cp -R "$a" "$VB/$a"; done
 chmod +x "$VB/core/classify.js" "$VB"/adapters/*/*.js "$VB"/adapters/*/*.sh 2>/dev/null || true
 echo "Rules and agent adapters → $VB"
@@ -96,13 +97,16 @@ const [file, stamp] = process.argv.slice(2);
 const exists = fs.existsSync(file);
 const config = exists ? JSON.parse(fs.readFileSync(file, 'utf8')) : { hooks: {} };
 const hooks = config.hooks || (config.hooks = {});
-const events = ['SessionStart', 'UserPromptSubmit', 'PostToolUse', 'PermissionRequest', 'Stop', 'Interrupt'];
+const events = ['SessionStart', 'UserPromptSubmit', 'PostToolUse', 'PermissionRequest', 'Stop', 'Interrupt', 'PreToolUse'];
 const adapter = 'veroboard/adapters/codex/hook.js';
 const added = [];
 for (const event of events) {
   const entries = hooks[event] || (hooks[event] = []);
-  if (entries.some((entry) => (entry.hooks || []).some((hook) => typeof hook.command === 'string' && hook.command.includes(adapter)))) continue;
-  entries.push({ hooks: [{ type: 'command', command: `node ~/.config/${adapter}`, timeout: 5 }] });
+  const guard = event === 'PreToolUse';
+  const script = guard ? 'veroboard/core/launch-guard.sh' : adapter;
+  if (entries.some((entry) => (entry.hooks || []).some((hook) => typeof hook.command === 'string' && hook.command.includes(script)))) continue;
+  entries.push({ ...(guard ? { matcher: 'Bash' } : {}), hooks: [{ type: 'command',
+    command: guard ? `sh ~/.config/${script} codex` : `node ~/.config/${script}`, timeout: 5 }] });
   added.push(event);
 }
 if (added.length) {
@@ -126,6 +130,7 @@ them). Put your current status line command after "--", or nothing after it if y
   "statusLine": { "type": "command", "command": "node ~/.config/veroboard/adapters/claude/tap.js -- <your status line command, or nothing>", "padding": 0 },
   "subagentStatusLine": { "type": "command", "command": "node ~/.config/veroboard/adapters/claude/subagents.js" },
   "hooks": {
+    "PreToolUse": [ { "matcher": "Bash", "hooks": [ { "type": "command", "command": "sh ~/.config/veroboard/core/launch-guard.sh claude", "timeout": 5 } ] } ],
     "Stop": [ { "hooks": [ { "type": "command", "command": "sh ~/.config/veroboard/adapters/claude/ping.sh", "timeout": 5 } ] } ],
     "Notification": [ { "hooks": [ { "type": "command", "command": "sh ~/.config/veroboard/adapters/claude/ping.sh", "timeout": 5 } ] } ]
   }

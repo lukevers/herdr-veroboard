@@ -10,6 +10,7 @@ process.exitCode = 0;
 function main() {
   const fs = require('fs');
   const session = require('../../core/session.js');
+  const { readSessionMeta, terminalId } = require('./terminal.js');
   const input = JSON.parse(fs.readFileSync(0, 'utf8')) || {};
   const meta = readSessionMeta(input.transcript_path);
   if (!meta || meta.originator !== 'codex-tui') return;
@@ -46,86 +47,44 @@ function main() {
     model: latest.model ? latest.model.split('-').map((part) => part === 'gpt' ? 'GPT' : part.charAt(0).toUpperCase() + part.slice(1)).join('-') : 'Codex',
     effort: latest.effort || '',
     shells: 0, shellList: [], monitorList: [],
-    launched: listLaunched(input.transcript_path),
+    launched: mergeLaunched(previous.codexSession === meta.id ? previous.launched : [], listLaunched(input.transcript_path), launchedNow(input)),
     git: session.gitFacts(git), worktree: (git && git.linked) || '',
     lastPrompt: input.hook_event_name === 'UserPromptSubmit' ? now : previous.lastPrompt ?? latest.lastPrompt ?? null,
     awaiting,
     rulesErrors: rules.errors.length ? rules.errors : undefined,
+    codexSession: meta.id,
   };
   session.noteNode();
   if (input.hook_event_name === 'Stop' || input.hook_event_name === 'PermissionRequest') session.ping(id);
   session.writeSession(id, facts);
 }
 
+// Codex runs PostToolUse before the tool's output reaches the session log, so the newest launch is read from the
+// hook input (tool_input.command, tool_response) and kept, with this session's earlier ones, until the log has it.
+function addresses(text) {
+  const found = [];
+  const clean = String(text || '').replace(/\\+"/g, '"');
+  for (const m of clean.matchAll(/"terminal"\s*:\s*"([A-Za-z0-9_\/-]+)"/g)) found.push(m[1]);
+  for (const m of clean.matchAll(/^\s*((?:[A-Za-z0-9_-]+\/)?t[0-9a-z]{1,4})\s*$/gm)) found.push(m[1]);
+  return found;
+}
+function launchedNow(input) {
+  if (input.hook_event_name !== 'PostToolUse') return [];
+  let toolInput = input.tool_input;
+  if (typeof toolInput === 'string') toolInput = parse(toolInput) || toolInput;
+  const command = typeof toolInput === 'string' ? toolInput : toolInput && (toolInput.command || toolInput.cmd);
+  if (typeof command !== 'string' || !/herdr-app\s+do\s+(tab\.new|space\.new|terminal\.open|pane\.split)\b/.test(command)) return [];
+  const response = input.tool_response;
+  return addresses(typeof response === 'string' ? response : JSON.stringify(response || ''));
+}
+function mergeLaunched(...lists) {
+  const all = [];
+  for (const list of lists) for (const a of Array.isArray(list) ? list : []) if (typeof a === 'string' && !all.includes(a)) all.push(a);
+  return all.slice(-200);
+}
+
 function parse(line) {
   try { return JSON.parse(line); } catch (_) { return null; }
-}
-
-function readSessionMeta(file) {
-  const fs = require('fs');
-  let fd;
-  try {
-    fd = fs.openSync(file, 'r');
-    const buffer = Buffer.alloc(4096);
-    const parts = [];
-    let length;
-    while ((length = fs.readSync(fd, buffer, 0, buffer.length, null)) > 0) {
-      const end = buffer.subarray(0, length).indexOf(10);
-      parts.push(Buffer.from(buffer.subarray(0, end < 0 ? length : end)));
-      if (end >= 0) break;
-    }
-    const first = parse(Buffer.concat(parts).toString('utf8'));
-    return first && first.type === 'session_meta' ? first.payload : null;
-  } catch (_) { return null; }
-  finally { if (fd !== undefined) try { fs.closeSync(fd); } catch (_) {} }
-}
-
-function terminalId(sessionId, cwd) {
-  const fs = require('fs');
-  const { execFileSync } = require('child_process');
-  const realpath = (value) => {
-    try { return fs.realpathSync(value); } catch (_) { return value; }
-  };
-  if (typeof cwd !== 'string' || !cwd) return;
-
-  // hc ls --json gives {terminals: [{address, agent, cwd, status: "idle"}]}; hc get <address> adds the title and
-  // the foreground program's cwd ({status: {app, state}, foreground: {cwd}, title}). Only Codex terminals are looked up.
-  let terminals, hc;
-  const run = (args) => parse(execFileSync(hc, args, { encoding: 'utf8', timeout: 1500, stdio: ['ignore', 'pipe', 'ignore'] }));
-  for (const executable of ['hc', `${process.env.HOME}/.local/bin/hc`]) {
-    try {
-      hc = executable;
-      const value = run(['ls', '--json']);
-      const list = Array.isArray(value) ? value : value && Array.isArray(value.terminals) ? value.terminals : null;
-      if (list) { terminals = list; break; }
-    } catch (_) {}
-  }
-  if (!terminals) return;
-  terminals = terminals.filter((t) => t && typeof t === 'object' && typeof t.address === 'string'
-    && (t.agent === 'codex' || (t.status && t.status.app === 'codex')))
-    .map((t) => { try { return { ...t, ...(run(['get', t.address]) || {}) }; } catch (_) { return t; } });
-
-  const candidates = terminals.filter((terminal) => terminal && typeof terminal === 'object'
-    && terminal.status && terminal.status.app === 'codex'
-    && realpath((terminal.foreground && terminal.foreground.cwd) || terminal.cwd) === realpath(cwd));
-  const inherited = candidates.find((terminal) => terminal.address === process.env.HC_TERMINAL_ID);
-  if (inherited) return inherited.address;
-  if (candidates.length === 1) return candidates[0].address;
-  if (!candidates.length || typeof sessionId !== 'string' || !sessionId) return;
-
-  let threadName;
-  try {
-    const index = fs.readFileSync(`${process.env.HOME}/.codex/session_index.jsonl`, 'utf8');
-    for (const line of index.split('\n')) {
-      const entry = parse(line);
-      if (entry && entry.id === sessionId) threadName = entry.thread_name;
-    }
-  } catch (_) { return; }
-  if (typeof threadName !== 'string' || !threadName) return;
-
-  const matches = candidates.filter((terminal) => typeof terminal.title === 'string'
-    && (terminal.title === threadName || terminal.title.startsWith(`${threadName} |`)));
-  if (matches.length === 1) return matches[0].address;
 }
 
 function messageText(content) {

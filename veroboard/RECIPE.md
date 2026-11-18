@@ -71,6 +71,10 @@ Top to bottom:
 - **Codex side** (`adapters/codex/hook.js`, hooks in `~/.codex/hooks.json`): on each prompt, tool call, permission
   request and stop it reads the Codex session log (model, effort, tokens, last message, launched terminals) and writes
   the same sessions file. Shared code (git, writing the file, pings) is in `core/session.js`.
+- **Launch guard** (`core/launch-guard.sh` + `.js`, a `PreToolUse` hook for Claude and Codex): blocks `herdr-app do
+  tab.new` without a space (exit 2, with the agent's own space id from `hc get`'s `herdr.space` label), so child agents
+  open in their parent's space. Only a launch at a command's start counts, not text that mentions it. Fails open when
+  unsure; other commands skip Node entirely.
 - **Programs and files outside the mod folder:** runs `node` (`classify.js`, for the dialog and the rules' hover text);
   reads `~/.config/veroboard/state/`, `~/.config/veroboard/core/defaults.json` and `~/.config/veroboard/config.json`; the dialog writes
   that config file.
@@ -95,8 +99,11 @@ Top to bottom:
   shared keys before installing.
 - Codex hooks run in a shared background process, and Codex helpers that other agents start inherit those agents'
   `HC_TERMINAL_ID`. So the Codex hook never trusts that variable. It needs `originator: "codex-tui"` in the session log,
-  then asks `hc ls` / `hc get` for a terminal running Codex in the same folder (the title names the thread when there
-  are two).
+  then asks `hc ls` / `hc get` for a terminal running Codex in the same folder. When two Codex tabs share a folder, the
+  facts file's `codexSession` (which session owns a tab) decides, then the title (`<thread name> | <folder>`, with a
+  spinner in front while it works).
+- Codex runs PostToolUse before the tool's output reaches its session log, so a launch is read from the hook input
+  (`tool_input.command`, `tool_response`) and kept for that session.
 
 ## Done when
 

@@ -205,6 +205,30 @@ try {
     assert.strictEqual(facts().lastPrompt, Date.parse(stamp));
   });
 
+  test('PostToolUse input catches a launch before the log has its output, and Stop keeps it', () => {
+    rollout([context(), call('herdr-app do tab.new --name x')]);
+    run({ hook_event_name: 'PostToolUse', tool_name: 'Bash',
+      tool_input: JSON.stringify({ command: "herdr-app do tab.new '{\"name\":\"x\"}'" }),
+      tool_response: JSON.stringify('{\n  "tab": "tb1",\n  "terminal": "t7q"\n}\n') });
+    assert.deepStrictEqual(facts().launched, ['t7q']);
+    run({ hook_event_name: 'Stop', last_assistant_message: 'Done.' });
+    assert.deepStrictEqual(facts().launched, ['t7q']);
+  });
+
+  test('a launch kept from another Codex session is dropped', () => {
+    rollout([context(), call('herdr-app do tab.new')]);
+    run({ hook_event_name: 'PostToolUse', tool_input: { command: 'herdr-app do tab.new' }, tool_response: '{"terminal":"t7q"}' });
+    rollout([context()], metadata({ id: 'session-2' }));
+    run({ hook_event_name: 'Stop', last_assistant_message: 'Done.' });
+    assert.deepStrictEqual(facts().launched, []);
+  });
+
+  test('PostToolUse output with a terminal id but no launch command adds nothing', () => {
+    rollout([context()]);
+    run({ hook_event_name: 'PostToolUse', tool_input: { command: "echo '{\"terminal\": \"t9z\"}'" }, tool_response: '{"terminal": "t9z"}' });
+    assert.deepStrictEqual(facts().launched, []);
+  });
+
   test('launched reads the input_text output Codex really writes', () => {
     rollout([context(),
       call('text(await tools.exec_command({cmd:"herdr-app do tab.new --name x",max_output_tokens:2000}));'),
@@ -331,6 +355,30 @@ try {
     assert.deepStrictEqual(writtenTerminals(), ['tc1.json']);
   });
 
+  test('a new Codex tab is found on its first turn when the other tab in its folder is owned', () => {
+    const dir = path.join(home, '.config/veroboard/state/sessions');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 't1.json'), JSON.stringify({ model: 'GPT-6.1-Sol', codexSession: 'older-session' }));
+    rollout([context()], metadata({ id: 'new-session' }));
+    const env = { HC_TERMINAL_ID: undefined, HC_TEST_OUTPUT: JSON.stringify([
+      terminal('t1', { title: 'Older thread | folder' }), terminal('t2', { title: '⠴ veroboard-codex-sandbox' })]) };
+    run({}, env);
+    assert.strictEqual(facts('t2').codexSession, 'new-session');
+    assert.strictEqual(facts('t1').codexSession, 'older-session');
+    // The older session still finds its own tab, now that both are owned.
+    rollout([context()], metadata({ id: 'older-session' }));
+    run({ hook_event_name: 'Stop', last_assistant_message: 'Done.' }, env);
+    assert.strictEqual(facts('t1').codexSession, 'older-session');
+    assert.strictEqual(facts('t2').codexSession, 'new-session');
+    assert.strictEqual(facts('t1').model, 'GPT-6.1-Sol');
+  });
+
+  test('two unowned Codex tabs in one folder without a thread name write nothing', () => {
+    rollout([context()], metadata({ id: 'new-session' }));
+    run({}, { HC_TERMINAL_ID: undefined, HC_TEST_OUTPUT: JSON.stringify([terminal('t1'), terminal('t2')]) });
+    nothingWritten();
+  });
+
   test('last session index name selects the single matching title', () => {
     rollout([context()]);
     sessionIndex([
@@ -338,7 +386,7 @@ try {
       { id: 'session-1', thread_name: 'Current', updated_at: '2026-11-17' },
       { id: 'another-session', thread_name: 'Old' },
     ]);
-    for (const title of ['Current | folder', 'Current']) {
+    for (const title of ['Current | folder', 'Current', '⠴ Current | folder']) {
       run({}, { HC_TERMINAL_ID: undefined, HC_TEST_OUTPUT: JSON.stringify([
         terminal('t1', { title: 'Old | folder' }), terminal('t2', { title }),
       ]) });
@@ -429,7 +477,7 @@ try {
     console.log(`ok   50 MB hook elapsed ${elapsed} ms (target < 300 ms)`);
     // With just one launch, its output must still survive beyond the tail window.
     const longLine = JSON.stringify(message('developer', 'x'.repeat(5 * 1024 * 1024))) + '\n';
-    fs.writeFileSync(file, JSON.stringify(metadata()) + '\n' + JSON.stringify(call('herdr-app do tab.new')) + '\n' + longLine + JSON.stringify(output('t7')) + '\n' + JSON.stringify(context()) + '\n');
+    fs.writeFileSync(file, JSON.stringify(metadata({ id: 'session-long' })) + '\n' + JSON.stringify(call('herdr-app do tab.new')) + '\n' + longLine + JSON.stringify(output('t7')) + '\n' + JSON.stringify(context()) + '\n');
     run();
     assert.deepStrictEqual(facts().launched, ['t7']);
   });

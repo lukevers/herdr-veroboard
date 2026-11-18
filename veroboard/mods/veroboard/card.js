@@ -185,7 +185,10 @@ const makeLayout = (c, items, def) => {
     seen.delete(id);
     return false;
   });
-  for (const id of ids) if (!seen.has(id)) {
+  // Anything not placed yet goes home in the default layout's order (then item order), so a missing or unreadable
+  // defaults.json still gives the default bar, not the item list's order (spaces before the gear, 2026-11-18).
+  for (const id of [...def.lines.flatMap((l) => [...l.left, ...l.right]), ...ids]) if (ids.includes(id) && !seen.has(id)) {
+    seen.add(id);
     if (def.hidden.includes(id)) { hidden.push(id); continue; }
     const [n, side] = homeOf(items, def, id); lines[n][side].push(id);
   }
