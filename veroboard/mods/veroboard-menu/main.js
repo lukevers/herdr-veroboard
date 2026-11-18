@@ -11,6 +11,8 @@ import { View, div, svg } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
 import { run, props, closeOverlay, theme, shared, setShared } from "herdr";
 
+const alpha = (hex, aa) => (/^#[0-9a-fA-F]{6}$/.test(hex) ? hex + aa : hex);
+
 function items(p) {
   const addr = p?.terminal;
   const marked = Boolean((shared("veroboard.blocked") ?? {})[addr]);
@@ -71,8 +73,10 @@ export default class BoardMenu extends View {
         .rounded(7)
         .items_center()
         .text_color(t.foreground)
-        .when(i === this.at, el => el.bg(t.selected))
-        .hover(s => s.bg(t.hover))
+        // The item the keys are on, and the one under the pointer: the accent's tint, as everywhere else in Veroboard
+        // (user, 2026-11-18).
+        .when(i === this.at, el => el.bg(alpha(t.accent, "26")))
+        .hover(s => s.bg(alpha(t.accent, "1a")))
         .on_click(() => this.choose(i))
         .child(svg(`mods/workspace-chrome/${it[1]}.svg`).size(14).flex_none().text_color(t.muted))
         .child(div().flex_1().child(it[0]))));

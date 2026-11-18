@@ -836,6 +836,9 @@ export default class Board extends View {
         .filter((n) => n && noticeUnread(n) && noticeIn(n, scope === "space" ? active : null)).length)
         .on_mouse_down("left", (e) => { this.bellBounds = e.bounds ?? null; })
         .on_click(() => {
+          // A press beside an open popup closes it, so a second click on the bell first closes the list, then lands
+          // here. The list closed just now: this click was to close it, so don't open it again (user, 2026-11-18).
+          if (Date.now() - (Number(shared("veroboard.listClosedAt")) || 0) < 400) return;
           const sp = scope === "space" && active ? active : null;
           const all = (Array.isArray(shared("veroboard.noticeLog")) ? shared("veroboard.noticeLog") : []).filter(Boolean);
           const shown = all.filter((n) => noticeIn(n, sp));

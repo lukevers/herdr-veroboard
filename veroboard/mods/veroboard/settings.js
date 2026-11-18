@@ -26,18 +26,13 @@ const alpha = (hex, aa) => (/^#[0-9a-fA-F]{6}$/.test(hex) ? hex + aa : hex);
 // Every section of a tab opens with a heading like this, and from the second on a rule with air on both sides sits above
 // it: the same on every tab (user, 2026-11-17).
 const heading = (t, text) => div().text_size(10.5).font_semibold().text_color(t.dim).child(text.toUpperCase());
-// A tab's description at its top, set apart as a callout: a tinted box with an accent edge (user, 2026-11-17).
-// mb(28) + the tab's gap of 18 = 46: the same space as between two sections (28 + rule + 18), so it reads as the tab's note.
-const callout = (t, text, below) => h_flex().mb(28).gap(10).items_start().px(12).py(9).rounded(6).bg(alpha(t.accent, "14")).border(1).border_color(alpha(t.accent, "33"))
-  .child(div().flex_none().w(3).h_full().min_h(16).rounded(2).bg(alpha(t.accent, "aa")))
-  .child(v_flex().flex_1().min_w(0).gap(7)
-    .child(div().text_size(11.5).text_color(t.foreground).child(text))
-    .when(Boolean(below), (el) => el.child(below)));
 // The Blocked reason badge exactly as a card draws it (card.js "why"), for the examples in this dialog.
 const whyBadge = (t, label, color) => badge(t).bg(alpha(color, "26")).text_color(color)
   .child(svg("mods/workspace-chrome/clock.svg").size(10).flex_none()).child(label);
 const code = (t, text) => div().flex_none().px(5).rounded(4).bg(t.background).border(1).border_color(t.border).font_family(MONO).text_size(11).child(text);
-const sections = (t, list) => v_flex().children(list.map((el, i) => (i === 0 ? el : div().mt(28).pt(18).border_t(1).border_color(t.border).child(el))));
+// The same space above a section's line as under it, 18px (user, 2026-11-18: 28 above read as too much). `above`:
+// what the section before already leaves under itself (a setting row ends with 10px of padding), taken off the 18.
+const sections = (t, list, above = 0) => v_flex().children(list.map((el, i) => (i === 0 ? el : div().mt(18 - above).pt(18).border_t(1).border_color(t.border).child(el))));
 const SKELETON = {
   "//": "Your Herdr board rules: added to the package's defaults. Edited by the board's Veroboard settings dialog (the gear), or by hand.",
   people: { names: [], notPeople: [] },
@@ -46,31 +41,37 @@ const SKELETON = {
 // The board's display settings: [key, label, help, kind, slider options]. Fallbacks match the package defaults.
 const VIEW_DEFAULTS = { cables: true, cablesThroughCards: 5, contextRamp: [50, 85], stuckMinutes: 15, glow: true, greyWhenSeen: true, doneTimer: true, activeRing: true, toastPlace: "top-right", toastArea: "board", noticeRead: "visit" };
 // Each group says which tab shows it (user, 2026-11-17: what's about a card goes on the Card tab, under its layout).
+// A group whose settings belong together ({ tight: true }) has no lines between its rows (user, 2026-11-18); Look is tight
+// too: four switches of one kind. Sections are always set apart.
 const DISPLAY = [
   ["Patch cables", "display", [
     ["cableExample", "", "", "example"],
     ["cables", "Show patch cables", "Lines from an agent to the agents it opened.", "switch"],
     ["cablesThroughCards", "Cables through cards", "How much the cables show through the cards.", "slider", { min: 0, max: 30, step: 1, ticks: 5, unit: "%" }],
-  ]],
+  ], { tight: true }],
   ["Look", "card", [
     ["activeRing", "Highlight the card shown below", "A ring and a faint wash on the agent whose terminal is on screen.", "switch"],
     ["glow", "Glow on finish or ask", "A card pulses once when its agent finishes, or asks you something.", "switch"],
     ["greyWhenSeen", "Grey Done cards once seen", "A Done card turns grey after you've looked at it, so green means new.", "switch"],
     ["doneTimer", "Time in Done", "The Time in lane badge also counts how long a card has been in Done.", "switch"],
-  ]],
+  ], { tight: true }],
   ["Context bar", "card", [
     ["contextRamp", "Color ramp", "The bar is plain below the first mark, then turns from peach to red, fully red at the second.", "range", { min: 0, max: 100, step: 1, ticks: 10, unit: "%" }],
   ]],
   ["Background work", "card", [
     ["cardRows", "Show background work rows", "Sub-agents, background shells and monitors, one row each under the card.", "rows"],
     ["stuckMinutes", "Looks stuck after", "A background shell, monitor or sub-agent with no news for this long shows its time in pink.", "slider", { min: 5, max: 60, step: 1, ticks: 5, unit: " min" }],
-  ]],
+  ], { tight: true }],
 ];
 const mixHex = (a, b, f) => {
   if (![a, b].every((c) => /^#[0-9a-fA-F]{6}/.test(c))) return f < 0.5 ? a : b;
   const ch = (h, i) => parseInt(h.slice(1 + i * 2, 3 + i * 2), 16);
   return "#" + [0, 1, 2].map((i) => Math.round(ch(a, i) + (ch(b, i) - ch(a, i)) * f).toString(16).padStart(2, "0")).join("");
 };
+// The dialog's two surfaces (user, 2026-11-18): the header a step darker than the popup color (halfway to the canvas,
+// a touch of the accent), the body a step lighter (a third of the way to raised). Same as the bell's list.
+const headBg = (t) => mixHex(mixHex(t.popover, t.canvas ?? "#000000", 0.5), t.accent, 0.04);
+const bodyBg = (t) => mixHex(t.popover, t.raised ?? t.popover, 0.3);
 const TABS = [
   // Looks, then what puts a card in Blocked (simple to advanced), then the sandbox (user, 2026-11-17).
   { key: "display", label: "Board" },
@@ -97,7 +98,7 @@ const TABS = [
       example: { add: "action item", msg: "Done.\nAction item: rotate the key.", to: "you", without: null } },
   ] },
   { key: "rules", label: "Rules" },
-  { key: "patterns", label: "Patterns", intro: "Advanced: JavaScript regular expressions, case-insensitive, for what plain phrases can't say.", items: [
+  { key: "patterns", label: "Patterns", introTitle: "Regular expressions", intro: "Advanced: JavaScript regular expressions, case-insensitive, for what plain phrases can't say.", items: [
     { key: ["blocked", "patterns", "asks"], label: "Ask patterns", placeholder: "Add a regular expression, then Enter", regex: true,
       help: "A match near the end means an ask (Blocked · You).",
       example: { add: "\\bthumbs up\\b", msg: "Done. Give it a thumbs up.", to: "you", without: null } },
@@ -108,6 +109,8 @@ const TABS = [
   { key: "test", label: "Test" },
 ];
 const ITEMS = TABS.flatMap((tab) => tab.items ?? []);
+// The Look switches' demos (Show, next to each): how long each plays on the example card.
+const DEMOS = { activeRing: { ms: 2500 }, glow: { ms: 2000 }, greyWhenSeen: { ms: 3200 }, doneTimer: { ms: 3600 } };
 const GROUPS = [
   ["Waits on someone", "The card goes to Blocked with that person's or agent's name."],
   ["Not blocked", "These end the check: the card isn't blocked."],
@@ -133,6 +136,14 @@ export class SettingsPanel {
     // Sliders hold their own value while dragged; `release` saves. Set from the config once it's loaded.
     this.sliders = {};
     this.live = {};
+    // A Look switch's Show button plays its effect on the Card tab's example card for a few seconds (DEMOS; user,
+    // 2026-11-18): redraw at ~30 fps while one plays, then once more to end it.
+    this.demo = null;
+    cx.timer.every(33, (cx) => {
+      if (!this.demo) return;
+      if (Date.now() - this.demo.at > DEMOS[this.demo.key].ms) this.demo = null;
+      cx.notify();
+    });
     for (const [, , rows] of DISPLAY) for (const [key, , , kind, opt] of rows) {
       if (kind !== "slider" && kind !== "range") continue; // only sliders keep a state (not switches, rows or the example)
       const s = SliderState.new({ min: opt.min, max: opt.max, step: opt.step, value: VIEW_DEFAULTS[key] });
@@ -188,7 +199,8 @@ export class SettingsPanel {
     const text = JSON.stringify(next, null, 2) + "\n";
     try {
       await writeTextFile(this.info.config, text, this.userText);
-      this.user = next; this.userText = text; this.status = "Saved. Agents use it from their next status-line run.";
+      // A save that worked says nothing (user, 2026-11-18); only problems show a message.
+      this.user = next; this.userText = text; this.status = "";
     } catch (e) {
       await this.load();
       this.status = `Not saved: the file changed on disk (or couldn't be written: ${e?.message ?? e}). Reloaded; try again.`;
@@ -247,7 +259,7 @@ export class SettingsPanel {
   displayTab(t, tab = "display") {
     const fmt = (v, unit) => (Array.isArray(v) ? `${v[0]}${unit} → ${v[1]}${unit}` : `${v}${unit}`);
     const reset = (key) => h_flex().id(`reset-${key}`).flex_none().h(20).px(7).items_center().rounded(4).cursor_pointer()
-      .text_size(11).text_color(t.muted).hover((s) => s.bg(t.hover).text_color(t.foreground))
+      .text_size(11).text_color(t.muted).hover((s) => s.bg(alpha(t.accent, "26")).text_color(t.foreground))
       .tooltip(`Back to the default (${fmt(this.defaultView(key), "")})`)
       .on_click((_e, cx) => { this.sliders[key]?.set_value(this.defaultView(key)); delete this.live[key]; this.setView(key, this.defaultView(key), cx); })
       .child("Reset");
@@ -256,7 +268,7 @@ export class SettingsPanel {
       // The rows switch lives in the card layout (board.card.rows); the rest are board settings of their own.
       const on = key === "cardRows" ? this.view("card").rows : this.view(key);
       return h_flex().id(`sw-${key}`).w(30).h(17).flex_none().rounded(9).px(2).items_center().cursor_pointer()
-        .bg(on ? alpha(t.done, "66") : t.raised).border(1).border_color(on ? alpha(t.done, "99") : t.border)
+        .bg(on ? alpha(t.accent, "66") : t.raised).border(1).border_color(on ? alpha(t.accent, "99") : t.border)
         .when(on, (el) => el.justify_end())
         .on_click((_e, cx) => (key === "cardRows" ? this.setView("card", { ...this.view("card"), rows: !on }, cx) : this.setView(key, !on, cx)))
         .child(div().size(11).rounded(6).bg(on ? t.foreground : t.dim));
@@ -291,6 +303,7 @@ export class SettingsPanel {
         .child(div().text_size(10.5).text_color(t.dim).child("PREVIEW: 0% TO 100%"))
         .child(h_flex().gap(2).children(cells));
     };
+    // `last`: no line under it (the group's last row, or any row of a tight group).
     const row = ([key, label, help, kind, opt], last) => {
       if (kind === "example") return this.cableExample(t);
       const value = kind === "switch" || kind === "rows" ? null : this.live[key] ?? this.view(key);
@@ -302,13 +315,20 @@ export class SettingsPanel {
             .child(div().text_size(11.5).text_color(t.muted).child(help)))
           .when(changed(key), (el) => el.child(reset(key)))
           .when(value !== null, (el) => el.child(h_flex().flex_none().min_w(76).justify_end().text_size(12.5).text_color(t.foreground).child(fmt(value, opt.unit))))
+          // Show: plays the effect on the example card above (DEMOS).
+          .when(Boolean(DEMOS[key]), (el) => el.child(h_flex().id(`demo-${key}`).flex_none().h(22).px(8).items_center().rounded(5).cursor_pointer()
+            .text_size(11.5).text_color(this.demo?.key === key ? t.accent : t.muted)
+            .when(this.demo?.key === key, (el) => el.bg(alpha(t.accent, "26")))
+            .hover((s) => s.bg(alpha(t.accent, "26")).text_color(t.foreground))
+            .tooltip("Show it on the example card above")
+            .on_click((_e, cx) => { this.demo = { key, at: Date.now() }; cx.notify(); }).child("Show")))
           .when(kind === "switch" || kind === "rows", (el) => el.child(toggle(key))))
         .when(kind === "slider" || kind === "range", (el) => el.child(div().px(8).child(slider(key, kind, opt))))
         .when(key === "contextRamp", (el) => el.child(div().px(8).child(rampPreview())));
     };
-    return sections(t, DISPLAY.filter(([, at]) => at === tab).map(([group, , rows]) => v_flex()
+    return sections(t, DISPLAY.filter(([, at]) => at === tab).map(([group, , rows, opts]) => v_flex()
       .child(heading(t, group))
-      .children(rows.map((r, i) => row(r, i === rows.length - 1)))));
+      .children(rows.map((r, i) => row(r, Boolean(opts?.tight) || i === rows.length - 1)))), 10);
   }
 
   // ---------- Layouts: the card's (Card tab) and the top bar's (Board tab) ----------
@@ -414,6 +434,17 @@ export class SettingsPanel {
   example(t) {
     const program = agents().find((a) => a.program?.icon && /claude/i.test(`${a.app ?? ""} ${a.program?.name ?? ""}`))?.program ?? agents()[0]?.program ?? null;
     const now = Date.now();
+    // A demo playing (Show next to a Look switch): the card as that effect looks on the board, whatever the switch says.
+    //  activeRing: the ring and wash of the card shown below. glow: two pulses. greyWhenSeen: a new Done card (green),
+    //  then seen (grey). doneTimer: a Done card whose Time in lane counts up past a minute.
+    const d = this.demo, dt = d ? now - d.at : 0;
+    const done = (color, lane) => ({ color, why: null, laneTime: lane ? { text: lane, color } : null });
+    const over = !d ? {}
+      : d.key === "activeRing" ? { shown: true }
+      : d.key === "glow" ? { flash: (dt % 1000) / 1000 }
+      : d.key === "greyWhenSeen" ? done(dt < 1400 ? t.done : t.idle, "3m")
+      : d.key === "doneTimer" ? done(t.done, (() => { const s = 57 + Math.floor(dt / 1000); return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m`; })())
+      : {};
     return {
       address: "t42", program, name: "fix-login-flow", color: t.blocked, shown: false, flash: null,
       laneTime: { text: "12m", color: t.working },
@@ -425,6 +456,7 @@ export class SettingsPanel {
         { kind: "shell", text: "npm run dev", startTime: now - 31 * 60000, waits: false },
         { kind: "monitor", text: "Watch CI", event: "build passed", eventAt: now - 60000, startTime: now - 9 * 60000, expiresAt: now + 21 * 60000 },
       ],
+      ...over,
     };
   }
 
@@ -448,7 +480,8 @@ export class SettingsPanel {
       cableLayers(t, { x: cw, y: 50 }, { x: cw, y: 150 }, 1, 1, c2, H, W),
     ] : [];
     const divider = (i) => div().absolute().left(lane(i) - 15).top(4).bottom(4).w(1).bg(mixHex(t.canvas, t.border, 0.5));
-    return v_flex().gap(8).py(10).border_b(1).border_color(t.border)
+    // No line under it: the Patch cables switch and slider under it are about the same thing.
+    return v_flex().gap(8).py(10)
       .child(div().text_size(11.5).text_color(t.muted).child(on
         ? "A patch cable runs from an agent to each agent it opened: here planner opened fix-login (two lanes over) and update-docs (in its own lane, so the cable loops down). api-tests isn't related: the cable runs behind it, and Cables through cards sets how much shows through."
         : "Patch cables are off: nothing shows which agent opened which. (The Opened by badge on the Card tab can show it instead.)"))
@@ -604,7 +637,7 @@ export class SettingsPanel {
         // Top bar: add a divider (divider2, divider3, …) at the end of the bar's left side, picked, to drag into place.
         .when(key === "top", (el) => el.child(h_flex().id("add-divider").flex_none().h(26).px(10).items_center().rounded(6)
           .cursor_pointer().text_size(11.5).bg(t.raised).border(1).border_color(t.border).text_color(t.foreground)
-          .hover((s) => s.bg(t.hover))
+          .hover((s) => s.bg(alpha(t.accent, "26")).border_color(alpha(t.accent, "55")))
           .on_click((_e, cx) => {
             const cur = this.view("top");
             const used = new Set([...cur.lines.flatMap((l) => [...l.left, ...l.right]), ...cur.hidden]);
@@ -615,10 +648,10 @@ export class SettingsPanel {
           }).child("+ Divider"))))
       .when(Boolean(this.user?.board && Object.prototype.hasOwnProperty.call(this.user.board, key)), (el) => el.child(h_flex()
         .child(h_flex().id(`reset-layout-${key}`).h(26).px(10).items_center().rounded(6).cursor_pointer().text_size(11.5)
-          .bg(t.raised).border(1).border_color(t.border).text_color(t.foreground).hover((s) => s.bg(t.hover))
+          .bg(t.raised).border(1).border_color(t.border).text_color(t.foreground).hover((s) => s.bg(alpha(t.accent, "26")).border_color(alpha(t.accent, "55")))
           .on_click((_e, cx) => { this.picked = null; this.setView(key, home, cx); }).child(ed.reset))))
       // A rule and some air between the layout editor and the tab's settings, so they read as two sections (user, 2026-11-17).
-      .when(Boolean(extra), (el) => el.child(div().mt(14).pt(18).border_t(1).border_color(t.border).child(extra))) // 14 + the gap of 14 = 28, as in sections()
+      .when(Boolean(extra), (el) => el.child(div().mt(4).pt(18).border_t(1).border_color(t.border).child(extra))) // 4 + the gap of 14 = 18, as in sections()
       // The dragged item's label, at the pointer.
       .when(Boolean(dragging), (el) => el.child(h_flex().absolute().left((this.drag.x ?? 0) + 12).top((this.drag.y ?? 0) + 10)
         .h(24).px(9).items_center().rounded(5).bg(t.popover).border(1).border_color(t.accent).text_size(11.5).text_color(t.foreground)
@@ -645,7 +678,7 @@ export class SettingsPanel {
       return h_flex().id(`place-${p}`).flex_1().h_full().p(4).rounded(4).cursor_pointer()
         .items_start().when(row === "middle", (el) => el.items_center()).when(row === "bottom", (el) => el.items_end())
         .when(col === "center", (el) => el.justify_center()).when(col === "right", (el) => el.justify_end())
-        .when(on, (el) => el.bg(alpha(t.accent, "1f"))).when(!on, (el) => el.hover((s) => s.bg(t.hover)))
+        .when(on, (el) => el.bg(alpha(t.accent, "1f"))).when(!on, (el) => el.hover((s) => s.bg(alpha(t.accent, "14"))))
         .tooltip(name(p))
         .on_click((_e, cx) => { if (!on) this.setView("toastPlace", p, cx); })
         .child(on ? mini() : div().size(6).rounded(3).bg(alpha(t.dim, "99")));
@@ -666,13 +699,14 @@ export class SettingsPanel {
       }]);
       closeOverlay(props()?.overlay);
     };
-    // First in the section, above Area and Placement (under the tall picker it looked odd; user, 2026-11-18).
-    const testRow = h_flex().gap(10).items_center().py(10).border_b(1).border_color(t.border)
+    // First in the section, above Area and Placement (under the tall picker it looked odd; user, 2026-11-18). No line
+    // under it: the section reads as one group (user, 2026-11-18).
+    const testRow = h_flex().gap(10).items_center().py(10)
       .child(v_flex().flex_1().min_w(0).gap(2)
         .child(div().text_size(12.5).font_semibold().text_color(t.foreground).child("Try it"))
         .child(div().text_size(11.5).text_color(t.muted).child("Shows a test notification where you picked. This dialog closes so you can see it.")))
       .child(h_flex().id("notice-test").flex_none().h(26).px(10).items_center().rounded(6).cursor_pointer()
-        .bg(t.raised).border(1).border_color(t.border).text_size(11.5).text_color(t.foreground).hover((s) => s.bg(t.hover))
+        .bg(t.raised).border(1).border_color(t.border).text_size(11.5).text_color(t.foreground).hover((s) => s.bg(alpha(t.accent, "26")).border_color(alpha(t.accent, "55")))
         .on_click(() => test()).child("Send a test"));
     // Over the board (top) or over the terminal (bottom; user, 2026-11-18): a two-way switch, the chosen side raised
     // with the light accent border, like the top bar's space chips.
@@ -681,7 +715,9 @@ export class SettingsPanel {
     const segs = (setting, current, choices) => h_flex().flex_none().p(2).gap(2).rounded(7).bg(t.background).border(1).border_color(t.border)
       .children(choices.map(([key, label]) => h_flex().id(`${setting}-${key}`).h(24).px(12).items_center().rounded(5).cursor_pointer().text_size(11.5)
         .border(1).border_color(current === key ? alpha(t.accent, "55") : "#00000000")
-        .when(current === key, (el) => el.bg(t.raised).text_color(t.foreground)).when(current !== key, (el) => el.text_color(t.muted).hover((s) => s.text_color(t.foreground)))
+        // Chosen: like the selected space chip (accent tint, border and text); the others take a faint tint under the pointer.
+        .when(current === key, (el) => el.bg(alpha(t.accent, "26")).text_color(t.accent))
+        .when(current !== key, (el) => el.text_color(t.muted).hover((s) => s.bg(alpha(t.accent, "14")).text_color(t.foreground)))
         .on_click((_e, cx) => { if (current !== key) this.setView(setting, key, cx); }).child(label)));
     // When a notification counts as read (user, 2026-11-18). Each choice says what reads one.
     const readMode = ["open", "visit", "hand"].includes(this.view("noticeRead")) ? this.view("noticeRead") : "visit";
@@ -695,9 +731,10 @@ export class SettingsPanel {
       .child(h_flex().gap(10).items_center().py(10)
         .child(v_flex().flex_1().min_w(0).gap(2)
           .child(div().text_size(12.5).font_semibold().text_color(t.foreground).child("Mark as read"))
-          .child(div().text_size(11.5).text_color(t.muted).child(`${readHelp} In the list, the row under the pointer has ✓ or ↺ (mark read or unread) and × (remove), and Mark all read works in every mode.`)))
+          .child(div().text_size(11.5).text_color(t.muted).child(`${readHelp} In the list, every row has ✓ or ↺ (mark read or unread) and × (remove), and Mark all read works in every mode.`)))
         .child(segs("noticeRead", readMode, [["open", "On open"], ["visit", "On visit"], ["hand", "By hand"]])));
-    const areaRow = h_flex().gap(10).items_center().py(10).border_b(1).border_color(t.border)
+    // No line between Area and Placement: the spot is inside the area (user, 2026-11-18).
+    const areaRow = h_flex().gap(10).items_center().py(10)
       .child(v_flex().flex_1().min_w(0).gap(2)
         .child(div().text_size(12.5).font_semibold().text_color(t.foreground).child("Area"))
         .child(div().text_size(11.5).text_color(t.muted).child("Over the board at the top, or over the terminal at the bottom. The spot below is inside that area.")))
@@ -714,10 +751,10 @@ export class SettingsPanel {
           .child(h_flex().mt(10).gap(8).items_center()
             .child(div().text_size(12.5).text_color(t.foreground).child(name(place)))
             .when(Boolean(changed), (el) => el.child(h_flex().id("reset-toastPlace").flex_none().h(20).px(7).items_center().rounded(4).cursor_pointer()
-              .text_size(11).text_color(t.muted).hover((s) => s.bg(t.hover).text_color(t.foreground))
+              .text_size(11).text_color(t.muted).hover((s) => s.bg(alpha(t.accent, "26")).text_color(t.foreground))
               .tooltip(`Back to the default (${name(this.defaultView("toastPlace"))})`)
               .on_click((_e, cx) => this.setView("toastPlace", this.defaultView("toastPlace"), cx)).child("Reset")))))
-        .child(grid)), readSection]);
+        .child(grid)), readSection], 10);
   }
 
   select(tab, cx) { this.tab = tab; remember(tab); cx.notify(); }
@@ -777,7 +814,7 @@ export class SettingsPanel {
         .text_size(12).text_color(t.foreground).when(Boolean(item.regex), (el) => el.font_family(MONO)));
   }
 
-  // What a tab's callout shows under its text: the card's own badges, or the pattern symbols as code (user, 2026-11-17).
+  // What a tab's intro shows under its text: the card's own badges, or the pattern symbols as code (user, 2026-11-17).
   introShows(t, key) {
     const row = () => h_flex().gap(6).items_center().flex_wrap().text_size(11).text_color(t.muted);
     if (key === "patterns") return row().child(code(t, "\\b")).child("a word edge").child(div().w(8)).child(code(t, "^")).child("the start of a sentence");
@@ -835,7 +872,7 @@ export class SettingsPanel {
         .child(this.lane(t, r ? r.to : null))
         .child(div().flex_1().min_w(0).text_color(t.muted).child(r ? `Rule ${r.rule}: ${r.why}` : "No rule matched: the card goes to Done (or Waiting, while background work runs)."))
         .when(Boolean(rule), (el) => el.child(h_flex().id("see-rule").flex_none().h(24).px(9).items_center().rounded(5).cursor_pointer()
-          .bg(t.raised).border(1).border_color(t.border).text_size(11.5).text_color(t.foreground).hover((s) => s.bg(t.hover))
+          .bg(t.raised).border(1).border_color(t.border).text_size(11.5).text_color(t.foreground).hover((s) => s.bg(alpha(t.accent, "26")).border_color(alpha(t.accent, "55")))
           .on_click((_e, cx) => { this.open = rule.id; this.select("rules", cx); }).child("See rule")));
     return v_flex().gap(12)
       .child(heading(t, "Test a message").mb(-4))
@@ -852,7 +889,7 @@ export class SettingsPanel {
       const on = !off.has(rule.id);
       const open = this.open === rule.id;
       const toggle = h_flex().id(`sw-${rule.id}`).w(30).h(17).flex_none().rounded(9).px(2).items_center().cursor_pointer()
-        .bg(on ? alpha(t.done, "66") : t.raised).border(1).border_color(on ? alpha(t.done, "99") : t.border)
+        .bg(on ? alpha(t.accent, "66") : t.raised).border(1).border_color(on ? alpha(t.accent, "99") : t.border)
         .tooltip(on ? "On: click to switch off" : "Off: click to switch on")
         .when(on, (el) => el.justify_end())
         .on_click((_e, cx) => this.toggleRule(rule.id, cx))
@@ -874,7 +911,7 @@ export class SettingsPanel {
             .child(this.lane(t, rule.expect))
             .child(div().flex_1())
             .when(rule.testable !== false, (el) => el.child(h_flex().id(`try-${rule.id}`).h(24).px(9).items_center().rounded(5).cursor_pointer()
-              .bg(t.raised).border(1).border_color(t.border).text_color(t.foreground).hover((s) => s.bg(t.hover))
+              .bg(t.raised).border(1).border_color(t.border).text_color(t.foreground).hover((s) => s.bg(alpha(t.accent, "26")).border_color(alpha(t.accent, "55")))
               .on_click((_e, cx) => this.tryExample(rule, cx)).child("Try it in Test")))
             .when(!on, (el) => el.child(div().text_color(t.dim).child("Off: the example won't give this now."))))));
     };
@@ -886,28 +923,32 @@ export class SettingsPanel {
             .child(heading(t, group))
             .child(div().text_size(11.5).text_color(t.muted).child(note)))
           .children(rules.map(row));
-      })));
+      }), 8));
   }
 
   render() {
-    const t = theme();
+    // The theme, with this dialog's surfaces (headBg, bodyBg): `popover` is the lighter body, `head` the darker header,
+    // and `border` (every line, between rows and sections, round boxes) a step darker than the body: the theme's border
+    // is the body's color now, so lines vanished (user, 2026-11-18).
+    const base = theme(), body = bodyBg(base);
+    const t = { ...base, popover: body, head: headBg(base), border: mixHex(body, base.canvas ?? "#000000", 0.4) };
     const off = listAt(this.user, ["blocked", "disable"]).length;
     const head = h_flex().h(44).flex_none().px(18).gap(10).items_center()
       .child(div().text_size(15).font_semibold().text_color(t.foreground).child("Veroboard settings"))
       .child(div().flex_1().min_w(0).truncate().text_size(11).text_color(t.dim).child(this.info?.config ?? ""))
       .when(Boolean(this.info), (el) => el.child(h_flex().id("br-open").h(26).px(10).items_center().rounded(6).cursor_pointer()
-        .bg(t.raised).border(1).border_color(t.border).text_size(11.5).text_color(t.foreground).hover((s) => s.bg(t.hover))
+        .bg(t.raised).border(1).border_color(t.border).text_size(11.5).text_color(t.foreground).hover((s) => s.bg(alpha(t.accent, "26")).border_color(alpha(t.accent, "55")))
         .tooltip("Open the file in your text editor")
         .on_click(() => exec("open", ["-t", this.info.config]).catch(() => {})).child("Open file")))
       .child(h_flex().id("br-close").size(26).items_center().justify_center().rounded(6).cursor_pointer().text_color(t.muted)
-        .hover((s) => s.bg(t.hover).text_color(t.foreground)).on_click(() => closeOverlay(props()?.overlay)).child("×"));
-    const tabs = h_flex().h(34).flex_none().px(14).gap(2).items_end().border_b(1).border_color(t.border)
+        .hover((s) => s.bg(alpha(t.accent, "26")).text_color(t.foreground)).on_click(() => closeOverlay(props()?.overlay)).child("×"));
+    const tabs = h_flex().h(34).flex_none().px(14).gap(2).items_end()
       .children(TABS.map((tab) => {
         const active = this.tab === tab.key;
         // No counts on the tabs (user, 2026-11-17): they read as alerts and only some tabs had one.
         const count = "";
         return h_flex().id(`tab-${tab.key}`).h(34).px(10).gap(6).items_center().cursor_pointer()
-          .border_b_2().border_color(active ? t.accent : t.popover)
+          .border_b_2().border_color(active ? t.accent : "#00000000")
           .text_size(12.5).text_color(active ? t.foreground : t.muted).when(active, (el) => el.font_semibold())
           .hover((s) => s.text_color(t.foreground))
           .on_click((_e, cx) => this.select(tab.key, cx))
@@ -922,11 +963,17 @@ export class SettingsPanel {
       : tab.key === "notices" ? (this.user ? this.noticesTab(t) : div())
       : tab.key === "test" ? this.testTab(t)
       : tab.key === "rules" ? this.rulesTab(t)
-      : v_flex().gap(18).when(Boolean(tab.intro), (el) => el.child(callout(t, tab.intro, this.introShows(t, tab.key))))
-        .when(Boolean(this.user), (el) => el.child(sections(t, tab.items.map((item) => this.list(t, item)))));
+      // A tab's intro is its first section, like the others (a heading, its text, what it shows), not a box above them
+      // with more space under it than between sections (user, 2026-11-18).
+      : sections(t, [
+        ...(tab.intro ? [v_flex().gap(6).child(heading(t, tab.introTitle ?? tab.label))
+          .child(div().text_size(11.5).text_color(t.muted).child(tab.intro))
+          .when(Boolean(this.introShows(t, tab.key)), (el) => el.child(div().mt(2).child(this.introShows(t, tab.key))))] : []),
+        ...(this.user ? tab.items.map((item) => this.list(t, item)) : []),
+      ]);
     // A light accent border like the selected space chip's, so the dialog stands off the board (user, 2026-11-18).
     return v_flex().id("board-settings-panel").size_full().bg(t.popover).text_color(t.foreground)
-      .rounded(10).border(1).border_color(alpha(t.accent, "55"))
+      .rounded(10).border(1).border_color(alpha(t.accent, "55")).overflow_hidden()
       .track_focus(this.handle)
       // Card or Board tab, an item picked in its layout editor: the arrow keys move it like the buttons (← → along its line and across sides,
       // ↑ ↓ a line). Keys typed in a text box stay there: those boxes hold the keyboard themselves.
@@ -937,8 +984,11 @@ export class SettingsPanel {
         this.moveIn(key, how, cx);
         cx.stop_propagation();
       })
-      .child(head)
-      .child(tabs)
+      // The title and the tabs on a light accent tint with an accent line under them, like the bell list's header
+      // (user, 2026-11-18), so the top stands apart from what's under it.
+      .child(v_flex().flex_none().bg(t.head).border_b(1).border_color(alpha(t.accent, "55"))
+        .child(head.border_b(1).border_color(alpha(t.accent, "26")))
+        .child(tabs))
       .when(Boolean(this.parseError), (el) => el.child(banner(`Your config isn't valid JSON (${this.parseError}). Fix it with Open file, then reopen this dialog. The board uses the defaults meanwhile.`, t.blocked)))
       .when(Boolean(this.ruleErrors?.length), (el) => el.child(banner(`Rule errors: ${this.ruleErrors.join("; ")}`, t.blocked)))
       .when(Boolean(this.status), (el) => el.child(div().mx(18).mt(10).text_size(11.5).text_color(t.muted).child(this.status)))

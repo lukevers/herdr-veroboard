@@ -72,7 +72,7 @@ Top to bottom:
   branch, parent. Opened from the bell with `props.view: "history"`, it lists the log newest first (at least four rows
   tall, each with its age): unread ones on the popup's color, then a sawtooth edge and the read ones darker and dimmed.
   When one counts as read is `board.noticeRead`: `"open"` (opening the list), `"visit"` (the default: clicking it, or
-  being on its agent's terminal) or `"hand"` (clicking it, or its ✓). In every mode the row under the pointer has ✓ or
+  being on its agent's terminal) or `"hand"` (clicking it, or its ✓). In every mode each row has ✓ or
   ↺ (mark unread) and, under it, × (remove that one), the header has Mark all read, and dismissing a toast counts as read. The bell and the list follow the board's space: one
   space selected shows that space's notifications (plus Herdr's own, which belong to no space); All Spaces shows all.
   Chips under the list's header pick another space.

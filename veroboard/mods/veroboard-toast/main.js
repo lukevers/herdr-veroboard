@@ -38,6 +38,10 @@ const pill = (t, text, fg, bg = t.raised, mono = false, icon = null, shrink = fa
   .when(Boolean(icon), (el) => el.child(svg(icon).size(10).flex_none())).child(div().min_w(0).truncate().child(text));
 // Which space a notification belongs to: as noticeIn in mods/veroboard/main.js (keep the two in step).
 const noticeIn = (n, sp) => !sp || !n.agent || (n.agent.spaceId ? n.agent.spaceId === sp.id : !n.agent.space || n.agent.space === sp.name);
+// The list's two surfaces (user, 2026-11-18): the header a step darker than the popup color (halfway to the canvas,
+// a touch of the accent), the body a step lighter (a third of the way to raised). Same as the settings dialog.
+const headBg = (t) => mix(mix(t.popover, t.canvas ?? "#000000", 0.5), t.accent, 0.04);
+const bodyBg = (t) => mix(t.popover, t.raised ?? t.popover, 0.3);
 const ago = (ms) => ms < 60000 ? "now" : ms < 3600000 ? `${Math.floor(ms / 60000)}m` : ms < 86400000 ? `${Math.floor(ms / 3600000)}h` : `${Math.floor(ms / 86400000)}d`;
 
 export default class VeroboardToast extends View {
@@ -58,10 +62,19 @@ export default class VeroboardToast extends View {
     closeOverlay(p.overlay);
   }
 
+  // The list closing (a click beside it, Esc, a row): note when, so a click on the bell that closed it doesn't open it
+  // again (mods/veroboard/main.js, the bell; user, 2026-11-18).
+  async close() {
+    if (props()?.view === "history") setShared("veroboard.listClosedAt", Date.now());
+  }
+
   render() {
     const p = props() ?? {};
     if (p.view !== "history") return div();
-    const t = theme();
+    // The theme, its lines (between rows) a step darker than the lighter body (bodyBg): the theme's border is about the
+    // body's color, so they vanished (user, 2026-11-18).
+    const base = theme();
+    const t = { ...base, border: mix(bodyBg(base), base.canvas ?? "#000000", 0.4) };
     const now = Date.now();
     // Which space's notifications: the board's space when the bell opened this (null: all), then the chip you pick.
     const all = spaces();
@@ -94,17 +107,24 @@ export default class VeroboardToast extends View {
       cx?.notify?.();
     };
     const count = (s) => whole.filter((n) => noticeIn(n, s)).length;
-    // A chip as the top bar's space chips: the selected one raised, with the light accent border.
-    const chip = (id, label, n) => h_flex().id(`log-sp-${id ?? "all"}`).flex_none().h(22).px(8).gap(5).items_center().rounded(6)
-      .border(1).border_color(this.space === id ? alpha(t.accent, "55") : "#00000000")
-      .when(this.space === id, (el) => el.bg(t.raised)).text_size(11.5)
-      .text_color(this.space === id ? t.foreground : t.muted).cursor_pointer().hover((s) => s.text_color(t.foreground))
-      .on_click((_e, cx) => pick(id, cx))
-      .child(label).when(n > 0, (el) => el.child(div().text_size(10.5).text_color(t.dim).child(String(n))));
+    // A chip as the top bar's space chips (topbar.js chip): the selected one tinted with the accent, its border and
+    // text in the accent; the others plain until the pointer is over them.
+    const chip = (id, label, n) => {
+      const on = this.space === id;
+      return h_flex().id(`log-sp-${id ?? "all"}`).flex_none().h(22).px(8).gap(5).items_center().rounded(6).text_size(11.5)
+        .border(1).border_color(on ? alpha(t.accent, "55") : "#00000000").when(on, (el) => el.bg(alpha(t.accent, "26")))
+        .text_color(on ? t.accent : t.muted).cursor_pointer()
+        .when(!on, (el) => el.hover((s) => s.bg(alpha(t.accent, "14")).text_color(t.foreground)))
+        .on_click((_e, cx) => pick(id, cx))
+        .child(label).when(n > 0, (el) => el.child(div().text_size(10.5).text_color(on ? alpha(t.accent, "99") : t.dim).child(String(n))));
+    };
+    // The header's buttons (Mark all read, Clear): plain text that takes the accent's tint under the pointer.
+    const headBtn = (id, label, act) => div().id(id).px(7).py(3).rounded(5).text_size(11.5).text_color(t.muted)
+      .cursor_pointer().hover((s) => s.bg(alpha(t.accent, "26")).text_color(t.foreground)).on_click(act).child(label);
     const dark = mix(t.popover, t.canvas ?? "#000000", 0.75);
     // The last new row has no bottom line: the sawtooth is its edge.
-    // On the row under the pointer, at its right, one above the other: ✓ (mark read) on an unread one, ↺ (mark unread) on a read one. The
-    // space is kept on every row, so nothing moves when it shows. A read row under the pointer is less dimmed.
+    // At every row's right, one above the other (always shown; user, 2026-11-18): ✓ (mark read) on an unread one,
+    // ↺ (mark unread) on a read one. A read row under the pointer is less dimmed.
     // Under it, × removes that one notification (from the list and, if it's still up, the board; user, 2026-11-18).
     const btn = (id, label, tip, act) => div().id(id).size(22).flex().items_center().justify_center().rounded(5)
       .cursor_pointer().text_size(12.5).text_color(t.muted).hover((s) => s.bg(t.raised).text_color(t.foreground))
@@ -119,18 +139,18 @@ export default class VeroboardToast extends View {
       if (this.hover === id) this.hover = null;
     };
     const toggle = (n) => {
-      const on = this.hover === n.id, r = isRead(n);
+      const r = isRead(n);
       return v_flex().flex_none().w(22).gap(2).justify_center()
-        .when(on, (el) => el
-          .child(btn(`log-mk-${n.id}`, r ? "↺" : "✓", r ? "Mark as unread" : "Mark as read", () => mark([n.id], !r)))
-          .child(btn(`log-rm-${n.id}`, "×", "Remove", () => remove(n.id))));
+        .child(btn(`log-mk-${n.id}`, r ? "↺" : "✓", r ? "Mark as unread" : "Mark as read", () => mark([n.id], !r)))
+        .child(btn(`log-rm-${n.id}`, "×", "Remove", () => remove(n.id)));
     };
     const row = (n) => h_flex().id(`log-${n.id}`).relative().h(ROW_H).flex_none().pl(14).pr(8).gap(11).items_center()
       .when(!(n === fresh[fresh.length - 1] && read.length > 0), (el) => el.border_b(1).border_color(t.border))
       .when(isRead(n), (el) => el.opacity(this.hover === n.id ? 0.8 : 0.45))
       .on_hover((on, cx) => { if (on) this.hover = n.id; else if (this.hover === n.id) this.hover = null; cx.notify(); })
       // Clicking one reads it (and goes to its agent, closing the list).
-      .when(Boolean(n.action), (el) => el.cursor_pointer().hover((s) => s.bg(t.hover)).on_click(() => {
+      // Under the pointer: the accent's tint (the theme's hover color is darker than the lighter body).
+      .when(Boolean(n.action), (el) => el.cursor_pointer().hover((s) => s.bg(alpha(t.accent, "14"))).on_click(() => {
         mark([n.id], true);
         run(n.action.name, n.action.args ?? {});
         closeOverlay(p.overlay);
@@ -164,26 +184,27 @@ export default class VeroboardToast extends View {
             .when(Boolean(n.agent.parent), (el) => el.child(pill(t, `${n.agent.parent.name || n.agent.parent.address} · ${n.agent.parent.address}`, t.muted, t.raised, false, "mods/veroboard/launched-by.svg")))))
         .child(toggle(n)));
     // A popup is as big as its content, so the list gets a real height (see ROW_H).
-    return v_flex().w(380).bg(t.popover).rounded(10).border(1).border_color(alpha(t.accent, "55")).overflow_hidden()
-      .child(h_flex().flex_none().h(40).px(14).gap(8).items_center().border_b(1).border_color(t.border)
-        .child(svg("mods/veroboard/bell.svg").size(13).text_color(t.muted))
+    // The header (the title and the space chips) on a light accent tint, like the top bar's selected space, with an
+    // accent line under it, so it stands apart from the list (user, 2026-11-18). Same heights as before (40 + 34 and
+    // their 1px lines), so the popup the bell sized still fits.
+    const chips = Boolean(p.bar) && all.length > 1;
+    const header = v_flex().flex_none().bg(headBg(t)).border_b(1).border_color(alpha(t.accent, "55"))
+      .child(h_flex().h(chips ? 40 : 39).px(14).gap(8).items_center().when(chips, (el) => el.border_b(1).border_color(alpha(t.accent, "26")))
+        .child(svg("mods/veroboard/bell.svg").size(13).text_color(t.accent))
         .child(div().flex_1().text_size(12.5).font_semibold().text_color(t.foreground).child("Notifications"))
         // Marks what's shown read (this space's, or all), when any is unread.
-        .when(fresh.length > 0, (el) => el.child(div().id("log-read-all").px(7).py(3).rounded(5).text_size(11.5).text_color(t.muted)
-          .cursor_pointer().hover((s) => s.bg(t.hover).text_color(t.foreground))
-          .on_click(() => mark(log.map((n) => n.id), true)).child("Mark all read")))
-        .when(log.length > 0, (el) => el.child(div().id("log-clear").px(7).py(3).rounded(5).text_size(11.5).text_color(t.muted)
-          .cursor_pointer().hover((s) => s.bg(t.hover).text_color(t.foreground))
-          // Clears what's shown: this space's (and Herdr's own), or all of them.
-          .on_click(() => {
-            const keep = (n) => !noticeIn(n, sp);
-            setShared(LOG, list(LOG).filter(keep)); setShared(NOTICES, list(NOTICES).filter(keep));
-          }).child("Clear"))))
+        .when(fresh.length > 0, (el) => el.child(headBtn("log-read-all", "Mark all read", () => mark(log.map((n) => n.id), true))))
+        // Clears what's shown: this space's (and Herdr's own), or all of them.
+        .when(log.length > 0, (el) => el.child(headBtn("log-clear", "Clear", () => {
+          const keep = (n) => !noticeIn(n, sp);
+          setShared(LOG, list(LOG).filter(keep)); setShared(NOTICES, list(NOTICES).filter(keep));
+        }))))
       // The spaces, when there's more than one (the bell sized the popup for this row: p.bar).
-      .when(Boolean(p.bar) && all.length > 1, (el) => el.child(h_flex().id("log-spaces").flex_none().h(34).px(10).gap(4).items_center()
-        .border_b(1).border_color(t.border).overflow_x_scroll()
+      .when(chips, (el) => el.child(h_flex().id("log-spaces").h(33).px(10).gap(4).items_center().overflow_x_scroll()
         .child(chip(null, "All", whole.length))
-        .children(all.map((s) => chip(s.id, s.name, count(s))))))
+        .children(all.map((s) => chip(s.id, s.name, count(s))))));
+    return v_flex().w(380).bg(bodyBg(t)).rounded(10).border(1).border_color(alpha(t.accent, "55")).overflow_hidden()
+      .child(header)
       .child(log.length
         // New on top on the popup's own color; then a sawtooth edge and the read ones on a darker color, dimmed (user,
         // 2026-11-18). All read: the whole list is the darker part; none read: no edge.
