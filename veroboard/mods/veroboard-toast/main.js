@@ -12,7 +12,7 @@ const NOTICES = "veroboard.notices"; // showing on the board now
 const LOG = "veroboard.noticeLog"; // the history, oldest first, the last 50
 // Sizes, kept in step with the bell in mods/veroboard/main.js, which opens this popup at exactly header + list.
 // A row has a fixed height so four of them really fit (user, 2026-11-18); the list is 4 to 7 rows, then it scrolls.
-const ROW_H = 56, LIST_MIN = 4 * ROW_H, LIST_MAX = 7 * ROW_H, EDGE_H = 10;
+const ROW_H = 62, LIST_MIN = 4 * ROW_H, LIST_MAX = 7 * ROW_H, EDGE_H = 10;
 const DOT = { error: "blocked", warning: "working", success: "done", info: "accent" };
 const list = (key) => (Array.isArray(shared(key)) ? shared(key) : []).filter(Boolean);
 const alpha = (hex, aa) => (/^#[0-9a-fA-F]{6}$/.test(hex) ? hex + aa : hex);
@@ -30,6 +30,12 @@ const sawtooth = (color, w = 380, h = EDGE_H, tooth = 16) => {
   return div().relative().w_full().h(h).flex_none()
     .child(globalThis.window.paint_path(PathBuilder.fill().add_polygon(pts, true).build(), color).absolute().top(0).left(0).size_full());
 };
+// A card-style badge (as card.js badge()): 16px, the theme's raised color unless given, an optional 10px icon, mono for ids.
+// `shrink`: gives way first when the line runs out of room, its text cut with … (the branch, so the parent still shows).
+const pill = (t, text, fg, bg = t.raised, mono = false, icon = null, shrink = false) => h_flex().h(16).px(6).gap(4).items_center()
+  .rounded(4).bg(bg).text_size(10.5).text_color(fg).when(mono, (el) => el.font_family("JetBrains Mono"))
+  .when(shrink, (el) => el.flex_shrink(1).min_w(0)).when(!shrink, (el) => el.flex_none())
+  .when(Boolean(icon), (el) => el.child(svg(icon).size(10).flex_none())).child(div().min_w(0).truncate().child(text));
 const ago = (ms) => ms < 60000 ? "now" : ms < 3600000 ? `${Math.floor(ms / 60000)}m` : ms < 86400000 ? `${Math.floor(ms / 3600000)}h` : `${Math.floor(ms / 86400000)}d`;
 
 export default class VeroboardToast extends View {
@@ -62,18 +68,36 @@ export default class VeroboardToast extends View {
     const fresh = log.filter((n) => !isRead(n)), read = log.filter(isRead);
     const dark = mix(t.popover, t.canvas ?? "#000000", 0.75);
     // The last new row has no bottom line: the sawtooth is its edge.
-    const row = (n) => h_flex().id(`log-${n.id}`).h(ROW_H).flex_none().px(14).gap(11).items_center()
+    const row = (n) => h_flex().id(`log-${n.id}`).relative().h(ROW_H).flex_none().px(14).gap(11).items_center()
       .when(!(n === fresh[fresh.length - 1] && read.length > 0), (el) => el.border_b(1).border_color(t.border))
       .when(isRead(n), (el) => el.opacity(0.45))
       .when(Boolean(n.action), (el) => el.cursor_pointer().hover((s) => s.bg(t.hover)).on_click(() => {
         run(n.action.name, n.action.args ?? {});
         closeOverlay(p.overlay);
       }))
-      .child(n.icon ? image(n.icon).w(16).h(16).flex_none() : div().size(8).rounded(4).flex_none().bg(t[DOT[n.level] ?? "accent"] ?? t.accent))
-      .child(v_flex().flex_1().min_w(0).gap(2)
-        .child(div().truncate().font_semibold().text_size(12.5).text_color(t.foreground).child(n.title))
-        .when(Boolean(n.body), (el) => el.child(div().truncate().text_size(11.5).text_color(t.muted).child(n.body))))
-      .child(div().flex_none().text_size(11).text_color(t.dim).child(ago(now - n.at)));
+      .when(!n.agent?.name, (el) => el
+        .child(n.icon ? image(n.icon).w(16).h(16).flex_none() : div().size(8).rounded(4).flex_none().bg(t[DOT[n.level] ?? "accent"] ?? t.accent))
+        .child(v_flex().flex_1().min_w(0).gap(2)
+          .child(div().truncate().font_semibold().text_size(12.5).text_color(t.foreground).child(n.title))
+          .when(Boolean(n.body), (el) => el.child(div().truncate().text_size(11.5).text_color(t.muted).child(n.body))))
+        .child(div().flex_none().text_size(11).text_color(t.dim).child(ago(now - n.at))))
+      // About an agent (the board saved its card facts on arrival): a slim card, as on the board's notices
+      // (user, 2026-11-18): a stripe in the why's color; name, why + age, id; then space, branch, who opened it.
+      .when(Boolean(n.agent?.name), (el) => el
+        // The stripe is the row's own left edge, as on a card, not a bar inside the padding (user, 2026-11-18).
+        .child(div().absolute().left(0).top(0).bottom(0).w(3).bg(n.agent.why?.color ?? t.accent))
+        .child(v_flex().flex_1().min_w(0).gap(6)
+          .child(h_flex().gap(6).items_center()
+            .child(div().flex_1().min_w(0).truncate().font_semibold().text_size(12.5).text_color(t.foreground).child(n.agent.name))
+            .when(Boolean(n.agent.why?.label), (el) => el.child(pill(t, `${n.agent.why.label} ${ago(now - n.at)}`, n.agent.why.color, alpha(n.agent.why.color, "26"))))
+            .child(pill(t, n.agent.address, t.muted, t.raised, true)))
+          .child(h_flex().gap(5).items_center().overflow_hidden()
+            .when(Boolean(n.agent.space), (el) => el.child(pill(t, n.agent.space, t.muted)))
+            // As on the card: a branch in a linked worktree is blue with the layers icon.
+            .when(Boolean(n.agent.branch), (el) => el.child(n.agent.branch.worktree
+              ? pill(t, n.agent.branch.name, t.ansi4, alpha(t.ansi4, "26"), false, "mods/workspace-chrome/layers.svg", true)
+              : pill(t, n.agent.branch.name, t.muted, t.raised, false, "mods/workspace-chrome/git-branch.svg", true)))
+            .when(Boolean(n.agent.parent), (el) => el.child(pill(t, `${n.agent.parent.name || n.agent.parent.address} · ${n.agent.parent.address}`, t.muted, t.raised, false, "mods/veroboard/launched-by.svg"))))));
     // A popup is as big as its content, so the list gets a real height (see ROW_H).
     return v_flex().w(380).bg(t.popover).rounded(10).border(1).border_color(alpha(t.accent, "55")).overflow_hidden()
       .child(h_flex().flex_none().h(40).px(14).gap(8).items_center().border_b(1).border_color(t.border)

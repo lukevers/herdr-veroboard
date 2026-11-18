@@ -111,6 +111,7 @@ export default class Board extends View {
     // What each Blocked rule looks for (~/.config/veroboard/core/classify.js --info), for the Blocked badge's hover text.
     // The board copy drops expired notices (veroboard-toast adds them), which also redraws to take them off.
     if (!props()?.role) cx.timer.every(1000, () => {
+      this.enrichNotices();
       const all = shared("veroboard.notices");
       if (!Array.isArray(all) || !all.length) return;
       const live = all.filter((n) => n && n.at + n.timeout > Date.now());
@@ -524,6 +525,29 @@ export default class Board extends View {
   // Notifications Herdr handed to mods/veroboard-toast (shared "veroboard.notices"), newest on top, at most three, in
   // the board's top-right corner. Each has the selected space chip's light accent border. A click runs its action
   // (usually: go to that agent) and dismisses it; × only dismisses. The board copy drops expired ones (init).
+  // A notification about an agent (Herdr's carry agent.focus {terminal}) gets that agent's card facts, saved with it
+  // when it arrives (user, 2026-11-18): name, id, why it's in its lane (or the lane), space, branch, who opened it.
+  // The bell's history keeps them after the agent is gone. The board copy runs this every second.
+  enrichNotices() {
+    const t = theme();
+    const lists = ["veroboard.notices", "veroboard.noticeLog"].map((k) => [k, Array.isArray(shared(k)) ? shared(k) : []]);
+    const need = (n) => n && !n.agent && typeof n.action?.args?.terminal === "string";
+    if (!lists.some(([, l]) => l.some(need))) return;
+    const snaps = {};
+    const snap = (addr) => snaps[addr] ??= (() => {
+      const a = agents().find((x) => x.address === addr);
+      if (!a) return { address: addr };
+      const pane = panes().find((p) => p.pane === a.pane);
+      const r = this.blockReason(a), lane = this.column(a), up = this.parentOf(addr);
+      return {
+        address: addr, name: a.tab_name || addr, space: a.space_name || "",
+        why: r ? { label: r.label, color: r.color } : { label: STATES.find((x) => x.key === lane)?.label ?? "", color: stateColor(t, lane) },
+        branch: pane?.branch ? { name: pane.branch, worktree: Boolean(this.sessions?.[addr]?.worktree) } : null,
+        parent: up ? { address: up, name: agents().find((x) => x.address === up)?.tab_name ?? "" } : null,
+      };
+    })();
+    for (const [k, l] of lists) if (l.some(need)) setShared(k, l.map((n) => (need(n) ? { ...n, agent: snap(n.action.args.terminal) } : n)));
+  }
   noticeStack(t) {
     const KEY = "veroboard.notices", now = Date.now();
     const all = Array.isArray(shared(KEY)) ? shared(KEY) : [];
@@ -536,14 +560,42 @@ export default class Board extends View {
       if (log.some((x) => x && x.id === id && !x.read)) setShared("veroboard.noticeLog", log.map((x) => x && x.id === id ? { ...x, read: true } : x));
     };
     const DOT = { error: "blocked", warning: "working", success: "done", info: "accent" };
-    return v_flex().absolute().top(8).right(24).w(320).gap(8).children(list.map((n) => h_flex().id(`notice-${n.id}`)
+    // About an agent (enrichNotices): like a slim card (user, 2026-11-18): a stripe in the why's color; its name, why +
+    // age and id; then space, branch and who opened it. Else Herdr's title and body.
+    // `shrink`: gives way first when the line runs out of room, cut with … (the branch, so the parent still shows).
+    const pill = (text, fg, bg = t.raised, mono = false, icon = null, shrink = false) => h_flex().h(16).px(6).gap(4).items_center()
+      .rounded(4).bg(bg).text_size(10.5).text_color(fg).when(mono, (el) => el.font_family("JetBrains Mono"))
+      .when(shrink, (el) => el.flex_shrink(1).min_w(0)).when(!shrink, (el) => el.flex_none())
+      .when(Boolean(icon), (el) => el.child(svg(icon).size(10).flex_none())).child(div().min_w(0).truncate().child(text));
+    const ago = (ms) => ms < 60000 ? "now" : ms < 3600000 ? `${Math.floor(ms / 60000)}m` : `${Math.floor(ms / 3600000)}h`;
+    const body = (n) => {
+      const g = n.agent;
+      if (!g?.name) return v_flex().flex_1().min_w(0).gap(2)
+        .child(div().truncate().font_semibold().text_size(13).text_color(t.foreground).child(n.title))
+        .when(Boolean(n.body), (el) => el.child(div().truncate().text_size(12).text_color(t.muted).child(n.body)));
+      return v_flex().flex_1().min_w(0).gap(6)
+        .child(h_flex().gap(6).items_center()
+          .child(div().flex_1().min_w(0).truncate().font_semibold().text_size(13).text_color(t.foreground).child(g.name))
+          .when(Boolean(g.why?.label), (el) => el.child(pill(`${g.why.label} ${ago(now - n.at)}`, g.why.color, alpha(g.why.color, "26"))))
+          .child(pill(g.address, t.muted, t.raised, true)))
+        .child(h_flex().gap(5).items_center().overflow_hidden()
+          .when(Boolean(g.space), (el) => el.child(pill(g.space, t.muted)))
+          // As on the card: a branch in a linked worktree is blue with the layers icon.
+          .when(Boolean(g.branch), (el) => el.child(g.branch.worktree
+            ? pill(g.branch.name, t.ansi4, alpha(t.ansi4, "26"), false, "mods/workspace-chrome/layers.svg", true)
+            : pill(g.branch.name, t.muted, t.raised, false, "mods/workspace-chrome/git-branch.svg", true)))
+          .when(Boolean(g.parent), (el) => el.child(pill(`${g.parent.name || g.parent.address} · ${g.parent.address}`, t.muted, t.raised, false, "mods/veroboard/launched-by.svg"))));
+    };
+    // The stripe is the notice's own left edge, as on a card (absolute, clipped by the rounded corners), not a bar
+    // inside the padding (that read as a blockquote; user, 2026-11-18).
+    return v_flex().absolute().top(8).right(24).w(340).gap(8).children(list.map((n) => h_flex().id(`notice-${n.id}`)
+      .relative().overflow_hidden()
       .px(14).py(10).gap(11).items_center().rounded(10).bg(t.popover).border(1).border_color(alpha(t.accent, "55")).shadow_lg()
       .cursor_pointer().hover((s) => s.bg(t.hover))
       .on_click(() => { if (n.action?.name) run(n.action.name, n.action.args ?? {}); drop(n.id); })
-      .child(n.icon ? image(n.icon).w(16).h(16).flex_none() : div().size(8).rounded(4).flex_none().bg(t[DOT[n.level] ?? "accent"] ?? t.accent))
-      .child(v_flex().flex_1().min_w(0).gap(2)
-        .child(div().truncate().font_semibold().text_size(13).text_color(t.foreground).child(n.title))
-        .when(Boolean(n.body), (el) => el.child(div().truncate().text_size(12).text_color(t.muted).child(n.body))))
+      .when(!n.agent?.name, (el) => el.child(n.icon ? image(n.icon).w(16).h(16).flex_none() : div().size(8).rounded(4).flex_none().bg(t[DOT[n.level] ?? "accent"] ?? t.accent)))
+      .when(Boolean(n.agent?.name), (el) => el.child(div().absolute().left(0).top(0).bottom(0).w(3).bg(n.agent.why?.color ?? t.accent)))
+      .child(body(n))
       .child(div().id(`notice-x-${n.id}`).flex_none().px(5).rounded(4).text_size(13).text_color(t.dim).cursor_pointer()
         .hover((s) => s.text_color(t.foreground).bg(t.raised))
         .on_mouse_down("left", (_e, cx) => cx.stop_propagation())
@@ -676,12 +728,12 @@ export default class Board extends View {
         .on_click(() => {
           const seenBefore = Number(shared("veroboard.noticesSeen")) || 0;
           setShared("veroboard.noticesSeen", Date.now());
-          // Exactly the list's size: a 40px header, 4 to 7 rows of 56px (+10 for the edge between new and read), a 1px
+          // Exactly the list's size: a 40px header, 4 to 7 rows of 62px (+10 for the edge between new and read), a 1px
           // border round it. Keep in step with mods/veroboard-toast (ROW_H, LIST_MIN, LIST_MAX, EDGE_H).
           const log = (Array.isArray(shared("veroboard.noticeLog")) ? shared("veroboard.noticeLog") : []).filter(Boolean);
           const read = log.filter((n) => n.read || n.at <= seenBefore).length;
           const edge = read > 0 && read < log.length ? 10 : 0;
-          const height = 40 + Math.max(4 * 56, Math.min(7 * 56, log.length * 56 + edge)) + 2;
+          const height = 40 + Math.max(4 * 62, Math.min(7 * 62, log.length * 62 + edge)) + 2;
           const b = this.bellBounds;
           const onLeft = (VIEW.top?.lines ?? []).some((l) => l.left.includes("bell"));
           const at = b ? { x: Math.max(0, onLeft ? b.x : b.x + b.width - 380), y: b.y + b.height + 8 } : undefined;
