@@ -16,7 +16,7 @@
 import { div, svg, PathBuilder } from "gpui-kit";
 import { v_flex, h_flex, InputState, Input, TextareaState, Textarea, SliderState, Slider, SliderTrack, SliderIndicator, SliderThumb } from "gpui-base";
 import { theme, exec, home, readTextFile, writeTextFile, props, closeOverlay, agents, spaces, shared, setShared } from "herdr";
-import { TOAST_PLACES, CARD_ITEMS, cardLayout, renderCard, TOP_ITEMS, topLayout, topItems, badge, WAITING } from "./card.js";
+import { TOAST_PLACES, CARD_ITEMS, ROW_KINDS, cardLayout, renderCard, TOP_ITEMS, topLayout, topItems, badge, WAITING } from "./card.js";
 import { cablePalette, cableLayers, cableDash, paintAt } from "./cables.js";
 import { hint, pie, chip, newSpaceButton, gearButton, dividerLine, renderTopBar, bellButton, statPill, word } from "./topbar.js";
 
@@ -32,6 +32,17 @@ const whyBadge = (t, label, color) => badge(t).bg(alpha(color, "26")).text_color
 const code = (t, text) => div().flex_none().px(5).rounded(4).bg(t.background).border(1).border_color(t.border).font_family(MONO).text_size(11).child(text);
 // The same space above a section's line as under it, 18px (user, 2026-11-18: 28 above read as too much). `above`:
 // what the section before already leaves under itself (a setting row ends with 10px of padding), taken off the 18.
+// Reset: on everything you can change, shown only while yours differs from the default (user, 2026-11-18: it says
+// you're not on the default). One look everywhere: small plain text, the accent's tint under the pointer.
+// Its room is always kept (`show` false: an empty slot of the same size), so nothing moves when it shows up (user,
+// 2026-11-18: text wrapped differently and the rows under it jumped).
+const RESET_W = 46;
+const resetButton = (t, id, tip, act, show = true) => !show ? div().flex_none().w(RESET_W).h(20)
+  : h_flex().id(id).flex_none().w(RESET_W).h(20).justify_center().items_center().rounded(4).cursor_pointer()
+    .text_size(11).text_color(t.muted).hover((s) => s.bg(alpha(t.accent, "26")).text_color(t.foreground))
+    .tooltip(tip).on_click((_e, cx) => act(cx)).child("Reset");
+// A section's heading with its Reset (when `reset` is given) at the right.
+const headingWith = (t, text, reset) => h_flex().h(20).items_center().child(div().flex_1().child(heading(t, text))).when(Boolean(reset), (el) => el.child(reset));
 const sections = (t, list, above = 0) => v_flex().children(list.map((el, i) => (i === 0 ? el : div().mt(18 - above).pt(18).border_t(1).border_color(t.border).child(el))));
 const SKELETON = {
   "//": "Your Herdr board rules: added to the package's defaults. Edited by the board's Veroboard settings dialog (the gear), or by hand.",
@@ -39,7 +50,7 @@ const SKELETON = {
   blocked: { asks: [], notAsks: [], nothingForYou: [], todoLabels: [], patterns: { asks: [], notAsks: [] }, disable: [] },
 };
 // The board's display settings: [key, label, help, kind, slider options]. Fallbacks match the package defaults.
-const VIEW_DEFAULTS = { cables: true, cablesThroughCards: 5, contextRamp: [50, 85], stuckMinutes: 15, glow: true, greyWhenSeen: true, doneTimer: true, activeRing: true, toastPlace: "top-right", toastArea: "board", noticeRead: "visit" };
+const VIEW_DEFAULTS = { cables: true, cablesThroughCards: 5, contextRamp: [50, 85], stuckTask: 15, stuckShell: 15, stuckMonitor: 30, waitTask: true, waitShell: true, waitMonitor: true, waitHelper: true, glow: true, greyWhenSeen: true, doneTimer: true, activeRing: true, toastPlace: "top-right", toastArea: "board", noticeRead: "visit", cableColors: "rainbow" };
 // Each group says which tab shows it (user, 2026-11-17: what's about a card goes on the Card tab, under its layout).
 // A group whose settings belong together ({ tight: true }) has no lines between its rows (user, 2026-11-18); Look is tight
 // too: four switches of one kind. Sections are always set apart.
@@ -47,6 +58,7 @@ const DISPLAY = [
   ["Patch cables", "display", [
     ["cableExample", "", "", "example"],
     ["cables", "Show patch cables", "Lines from an agent to the agents it opened.", "switch"],
+    ["cableColors", "Cable colors", "The theme's colors, or shades of grey.", "choice", { choices: [["rainbow", "Rainbow"], ["grey", "Grey"]] }],
     ["cablesThroughCards", "Cables through cards", "How much the cables show through the cards.", "slider", { min: 0, max: 30, step: 1, ticks: 5, unit: "%" }],
   ], { tight: true }],
   ["Look", "card", [
@@ -59,8 +71,20 @@ const DISPLAY = [
     ["contextRamp", "Color ramp", "The bar is plain below the first mark, then turns from peach to red, fully red at the second.", "range", { min: 0, max: 100, step: 1, ticks: 10, unit: "%" }],
   ]],
   ["Background work", "card", [
-    ["cardRows", "Show background work rows", "Sub-agents, background shells and monitors, one row each under the card.", "rows"],
-    ["stuckMinutes", "Looks stuck after", "A background shell, monitor or sub-agent with no news for this long shows its time in pink.", "slider", { min: 5, max: 60, step: 1, ticks: 5, unit: " min" }],
+    // Each kind's row switch, then how long it may go quiet before its time turns pink (user, 2026-11-18: one each).
+    ["rowsTask", "Sub-agents", "A row under the card for each sub-agent it runs (Explore, codex:codex-rescue, …).", "rows"],
+    ["stuckTask", "Sub-agent looks stuck after", "A sub-agent running this long shows its time in pink.", "slider", { min: 5, max: 60, step: 1, ticks: 5, unit: " min" }],
+    ["rowsShell", "Background shells", "A row for each shell it runs in the background (a dev server, a test watcher).", "rows"],
+    ["stuckShell", "Shell looks stuck after", "A shell it waits on, running this long, shows its time in pink. One it doesn't wait on (a dev server) never does.", "slider", { min: 5, max: 60, step: 1, ticks: 5, unit: " min" }],
+    ["rowsMonitor", "Monitors", "A row for each monitor it watches (CI, a deploy), with the latest event. Hidden rows still count for Waiting.", "rows"],
+    ["stuckMonitor", "Monitor looks stuck after", "A monitor with no new event for this long shows its time in pink.", "slider", { min: 5, max: 60, step: 1, ticks: 5, unit: " min" }],
+  ], { tight: true }],
+  // What keeps a card in Waiting (user, 2026-11-18): it decides lanes, not looks, so a group of its own.
+  ["Waiting", "card", [
+    ["waitTask", "Sub-agents", "A card stays in Waiting while a sub-agent runs. Off: it goes to Done when its turn ends.", "switch"],
+    ["waitShell", "Shells it waits on", "A shell the agent will be woken by (a build, tests, a CI watch). A dev server never counts.", "switch"],
+    ["waitMonitor", "Monitors", "A monitor it watches (CI, a deploy) until it ends.", "switch"],
+    ["waitHelper", "Helper terminals", "A terminal it opened with hc (a shell it drives), while it's open.", "switch"],
   ], { tight: true }],
 ];
 const mixHex = (a, b, f) => {
@@ -109,6 +133,8 @@ const TABS = [
   { key: "test", label: "Test" },
 ];
 const ITEMS = TABS.flatMap((tab) => tab.items ?? []);
+// The Background work switches, one per kind of row (user, 2026-11-18), and the kind each sets.
+const ROW_SWITCH = { rowsTask: "task", rowsShell: "shell", rowsMonitor: "monitor" };
 // Veroboard on GitHub: the header's GitHub button.
 const REPO = "https://github.com/lukevers/herdr-veroboard";
 // The Look switches' demos (Show, next to each): how long each plays on the example card.
@@ -239,7 +265,9 @@ export class SettingsPanel {
     if (key === "card") return cardLayout(this.user?.board?.card ?? this.defaults?.board?.card);
     if (key === "top") return topLayout(this.user?.board?.top ?? this.defaults?.board?.top);
     const ok = (x) => (key === "contextRamp" ? Array.isArray(x) && x.length === 2 && x.every(Number.isFinite) : typeof x === typeof VIEW_DEFAULTS[key]);
-    const mine = this.user?.board?.[key], pkg = this.defaults?.board?.[key];
+    // An older config's one stuckMinutes stands for each kind it doesn't set (as the board reads it: card.js viewFrom).
+    const old = (o) => (/^stuck(Task|Shell|Monitor)$/.test(key) && !ok(o?.board?.[key]) && Number.isFinite(o?.board?.stuckMinutes) ? o.board.stuckMinutes : undefined);
+    const mine = this.user?.board?.[key] ?? old(this.user), pkg = this.defaults?.board?.[key] ?? old(this.defaults);
     return ok(mine) ? mine : ok(pkg) ? pkg : VIEW_DEFAULTS[key];
   }
   defaultView(key) {
@@ -260,19 +288,24 @@ export class SettingsPanel {
   // The settings groups for one tab ("display": the Board tab; "card": under the Card tab's layout).
   displayTab(t, tab = "display") {
     const fmt = (v, unit) => (Array.isArray(v) ? `${v[0]}${unit} → ${v[1]}${unit}` : `${v}${unit}`);
-    const reset = (key) => h_flex().id(`reset-${key}`).flex_none().h(20).px(7).items_center().rounded(4).cursor_pointer()
-      .text_size(11).text_color(t.muted).hover((s) => s.bg(alpha(t.accent, "26")).text_color(t.foreground))
-      .tooltip(`Back to the default (${fmt(this.defaultView(key), "")})`)
-      .on_click((_e, cx) => { this.sliders[key]?.set_value(this.defaultView(key)); delete this.live[key]; this.setView(key, this.defaultView(key), cx); })
-      .child("Reset");
-    const changed = (key) => this.user?.board && Object.prototype.hasOwnProperty.call(this.user.board, key);
+    // The background work rows' switches are part of the card layout (board.card.rowKinds): one kind each (ROW_SWITCH).
+    // Setting one keeps the rest of the layout; `rows` follows (any kind shown).
+    const setRowKind = (kind, on, cx) => {
+      const cur = this.view("card"), rowKinds = { ...cur.rowKinds, [kind]: on };
+      this.setView("card", { ...cur, rowKinds, rows: ROW_KINDS.some((k) => rowKinds[k]) }, cx);
+    };
+    const reset = (key, show) => ROW_SWITCH[key]
+      ? resetButton(t, `reset-${key}`, `Back to the default (${this.defaultView("card").rowKinds[ROW_SWITCH[key]] ? "on" : "off"})`, (cx) => setRowKind(ROW_SWITCH[key], this.defaultView("card").rowKinds[ROW_SWITCH[key]], cx), show)
+      : resetButton(t, `reset-${key}`, `Back to the default (${fmt(this.defaultView(key), "")})`, (cx) => { this.sliders[key]?.set_value(this.defaultView(key)); delete this.live[key]; this.setView(key, this.defaultView(key), cx); }, show);
+    const changed = (key) => ROW_SWITCH[key] ? this.view("card").rowKinds[ROW_SWITCH[key]] !== this.defaultView("card").rowKinds[ROW_SWITCH[key]]
+      : this.user?.board && Object.prototype.hasOwnProperty.call(this.user.board, key);
     const toggle = (key) => {
-      // The rows switch lives in the card layout (board.card.rows); the rest are board settings of their own.
-      const on = key === "cardRows" ? this.view("card").rows : this.view(key);
+      // The row kinds live in the card layout (board.card.rowKinds); the rest are board settings of their own.
+      const on = ROW_SWITCH[key] ? this.view("card").rowKinds[ROW_SWITCH[key]] : this.view(key);
       return h_flex().id(`sw-${key}`).w(30).h(17).flex_none().rounded(9).px(2).items_center().cursor_pointer()
         .bg(on ? alpha(t.accent, "66") : t.raised).border(1).border_color(on ? alpha(t.accent, "99") : t.border)
         .when(on, (el) => el.justify_end())
-        .on_click((_e, cx) => (key === "cardRows" ? this.setView("card", { ...this.view("card"), rows: !on }, cx) : this.setView(key, !on, cx)))
+        .on_click((_e, cx) => (ROW_SWITCH[key] ? setRowKind(ROW_SWITCH[key], !on, cx) : this.setView(key, !on, cx)))
         .child(div().size(11).rounded(6).bg(on ? t.foreground : t.dim));
     };
     const slider = (key, kind, opt) => {
@@ -308,14 +341,14 @@ export class SettingsPanel {
     // `last`: no line under it (the group's last row, or any row of a tight group).
     const row = ([key, label, help, kind, opt], last) => {
       if (kind === "example") return this.cableExample(t);
-      const value = kind === "switch" || kind === "rows" ? null : this.live[key] ?? this.view(key);
-      const dim = key === "cablesThroughCards" && !this.view("cables");
+      const value = kind === "switch" || kind === "rows" || kind === "choice" ? null : this.live[key] ?? this.view(key);
+      const dim = (key === "cablesThroughCards" || key === "cableColors") && !this.view("cables");
       return v_flex().gap(8).py(10).when(!last, (el) => el.border_b(1).border_color(t.border)).when(dim, (el) => el.opacity(0.5))
         .child(h_flex().gap(10).items_center()
           .child(v_flex().flex_1().min_w(0).gap(2)
             .child(div().text_size(12.5).font_semibold().text_color(t.foreground).child(label))
             .child(div().text_size(11.5).text_color(t.muted).child(help)))
-          .when(changed(key), (el) => el.child(reset(key)))
+          .child(reset(key, Boolean(changed(key))))
           .when(value !== null, (el) => el.child(h_flex().flex_none().min_w(76).justify_end().text_size(12.5).text_color(t.foreground).child(fmt(value, opt.unit))))
           // Show: plays the effect on the example card above (DEMOS).
           .when(Boolean(DEMOS[key]), (el) => el.child(h_flex().id(`demo-${key}`).flex_none().h(22).px(8).items_center().rounded(5).cursor_pointer()
@@ -324,7 +357,17 @@ export class SettingsPanel {
             .hover((s) => s.bg(alpha(t.accent, "26")).text_color(t.foreground))
             .tooltip("Show it on the example card above")
             .on_click((_e, cx) => { this.demo = { key, at: Date.now() }; cx.notify(); }).child("Show")))
-          .when(kind === "switch" || kind === "rows", (el) => el.child(toggle(key))))
+          .when(kind === "switch" || kind === "rows", (el) => el.child(toggle(key)))
+          // A few choices (Cable colors): the chosen one like the selected space chip, as on the Notifications tab.
+          .when(kind === "choice", (el) => el.child(h_flex().flex_none().p(2).gap(2).rounded(7).bg(t.background).border(1).border_color(t.border)
+            .children(opt.choices.map(([v, label]) => {
+              const cur = (this.view(key) === v) || (!opt.choices.some(([x]) => x === this.view(key)) && v === opt.choices[0][0]);
+              return h_flex().id(`${key}-${v}`).h(24).px(12).items_center().rounded(5).cursor_pointer().text_size(11.5)
+                .border(1).border_color(cur ? alpha(t.accent, "55") : "#00000000")
+                .when(cur, (el) => el.bg(alpha(t.accent, "26")).text_color(t.accent))
+                .when(!cur, (el) => el.text_color(t.muted).hover((s) => s.bg(alpha(t.accent, "14")).text_color(t.foreground)))
+                .on_click((_e, cx) => { if (!cur) this.setView(key, v, cx); }).child(label);
+            })))))
         .when(kind === "slider" || kind === "range", (el) => el.child(div().px(8).child(slider(key, kind, opt))))
         .when(key === "contextRamp", (el) => el.child(div().px(8).child(rampPreview())));
     };
@@ -488,10 +531,11 @@ export class SettingsPanel {
     //   A parent and two children on separate tasks (user, 2026-11-18: no child's child; tests aren't an agent of
     //   their own): planner (Claude, waiting on CI) opened fix-login (Claude, with Codex implementing the fix: a
     //   codex:codex-rescue sub-agent) and update-docs (Codex).
-    const now = Date.now(), rowH = L.rows ? 22 : 0;
+    // A row adds 22px when its kind shows: planner's is a shell, fix-login's a sub-agent.
+    const now = Date.now(), rowH = L.rows && L.rowKinds.task ? 22 : 0;
     const TOP = 12, MID = 38, NEXT = TOP + 76 + rowH + 9;
     const H = NEXT + 76 + 12;
-    const palette = cablePalette(t), pick = (i) => palette[i % palette.length];
+    const palette = cablePalette(t, this.view("cableColors") === "grey"), pick = (i) => palette[i % palette.length];
     const on = this.view("cables");
     const cables = on ? [
       cableLayers(t, { x: lane(0) + cw, y: TOP + MID - 6.5 }, { x: lane(1), y: TOP + MID }, 1, -1, pick(0), H, W),
@@ -520,7 +564,7 @@ export class SettingsPanel {
 
   // Which line a cable gets: its parent's generation (user, 2026-11-18). Drawn with the board's own dash patterns.
   cableLegend(t) {
-    const palette = cablePalette(t);
+    const palette = cablePalette(t, this.view("cableColors") === "grey");
     const sample = (gen) => {
       const dash = cableDash(gen);
       const pen = dash ? PathBuilder.stroke(2.5).dash_array(dash) : PathBuilder.stroke(2.5);
@@ -637,7 +681,9 @@ export class SettingsPanel {
       // Leaving the tab mid-drag cancels it, so a release outside the dialog can't leave a drag half done.
       .on_hover((hovered, cx) => { if (!hovered && this.drag) { this.drag = null; this.over = null; this.overZone = null; cx.notify(); } })
       // A section heading, in the same style as Patch cables below it (user, 2026-11-17).
-      .when(Boolean(ed.heading), (el) => el.child(heading(t, ed.heading).mb(-6)))
+      .when(Boolean(ed.heading), (el) => el.child(headingWith(t, ed.heading,
+        resetButton(t, `reset-layout-${key}`, ed.reset, (cx) => { this.picked = null; this.setView(key, home, cx); },
+          Boolean(this.user?.board && Object.prototype.hasOwnProperty.call(this.user.board, key)))).mb(-6)))
       .child(div().text_size(11.5).text_color(t.muted).child(ed.intro))
       .child(ed.barOnly && !ed.zones
         ? div().id(`bar-drop-${key}`).relative().rounded(8)
@@ -667,10 +713,6 @@ export class SettingsPanel {
             this.picked = `divider${n}`;
             this.setView("top", next, cx);
           }).child("+ Divider"))))
-      .when(Boolean(this.user?.board && Object.prototype.hasOwnProperty.call(this.user.board, key)), (el) => el.child(h_flex()
-        .child(h_flex().id(`reset-layout-${key}`).h(26).px(10).items_center().rounded(6).cursor_pointer().text_size(11.5)
-          .bg(t.raised).border(1).border_color(t.border).text_color(t.foreground).hover((s) => s.bg(alpha(t.accent, "26")).border_color(alpha(t.accent, "55")))
-          .on_click((_e, cx) => { this.picked = null; this.setView(key, home, cx); }).child(ed.reset))))
       // A rule and some air between the layout editor and the tab's settings, so they read as two sections (user, 2026-11-17).
       .when(Boolean(extra), (el) => el.child(div().mt(4).pt(18).border_t(1).border_color(t.border).child(extra))) // 4 + the gap of 14 = 18, as in sections()
       // The dragged item's label, at the pointer.
@@ -747,18 +789,25 @@ export class SettingsPanel {
       visit: "A notification stays unread until you click it, or go to its agent's terminal any other way (its card, its tab, a key).",
       hand: "A notification stays unread until you click it, or mark it read with its ✓ in the list.",
     }[readMode];
+    // Reset for a setting saved in your config (board.<key>), as on the other tabs.
+    const mine = (key) => Boolean(this.user?.board && Object.prototype.hasOwnProperty.call(this.user.board, key));
+    const resetFor = (key, label) => resetButton(t, `reset-${key}`, `Back to the default (${label(this.defaultView(key))})`, (cx) => this.setView(key, this.defaultView(key), cx), mine(key));
+    const readNames = { open: "On open", visit: "On visit", hand: "By hand" };
     const readSection = v_flex()
       .child(heading(t, "Read and unread"))
       .child(h_flex().gap(10).items_center().py(10)
         .child(v_flex().flex_1().min_w(0).gap(2)
           .child(div().text_size(12.5).font_semibold().text_color(t.foreground).child("Mark as read"))
-          .child(div().text_size(11.5).text_color(t.muted).child(`${readHelp} In the list, every row has ✓ or ↺ (mark read or unread) and × (remove), and Mark all read works in every mode.`)))
+          // Three lines kept, the longest mode's, so switching modes doesn't move what's under it.
+          .child(div().min_h(51).text_size(11.5).text_color(t.muted).child(`${readHelp} In the list, every row has ✓ or ↺ (mark read or unread) and × (remove), and Mark all read works in every mode.`)))
+        .child(resetFor("noticeRead", (v) => readNames[v] ?? v))
         .child(segs("noticeRead", readMode, [["open", "On open"], ["visit", "On visit"], ["hand", "By hand"]])));
     // No line between Area and Placement: the spot is inside the area (user, 2026-11-18).
     const areaRow = h_flex().gap(10).items_center().py(10)
       .child(v_flex().flex_1().min_w(0).gap(2)
         .child(div().text_size(12.5).font_semibold().text_color(t.foreground).child("Area"))
         .child(div().text_size(11.5).text_color(t.muted).child("Over the board at the top, or over the terminal at the bottom. The spot below is inside that area.")))
+      .child(resetFor("toastArea", (v) => (v === "terminal" ? "Terminal" : "Board")))
       .child(segs("toastArea", area, [["board", "Board"], ["terminal", "Terminal"]]));
     return sections(t, [v_flex()
       .child(heading(t, "Pop-up notifications"))
@@ -771,10 +820,7 @@ export class SettingsPanel {
           .child(div().text_size(11.5).text_color(t.muted).child(`Where notifications pop up ${area === "terminal" ? "over the terminal" : "on the board"}. The newest sits nearest the edge. The bell's list still opens under the bell.`))
           .child(h_flex().mt(10).gap(8).items_center()
             .child(div().text_size(12.5).text_color(t.foreground).child(name(place)))
-            .when(Boolean(changed), (el) => el.child(h_flex().id("reset-toastPlace").flex_none().h(20).px(7).items_center().rounded(4).cursor_pointer()
-              .text_size(11).text_color(t.muted).hover((s) => s.bg(alpha(t.accent, "26")).text_color(t.foreground))
-              .tooltip(`Back to the default (${name(this.defaultView("toastPlace"))})`)
-              .on_click((_e, cx) => this.setView("toastPlace", this.defaultView("toastPlace"), cx)).child("Reset")))))
+            .child(resetFor("toastPlace", name))))
         .child(grid)), readSection], 10);
   }
 
@@ -825,7 +871,10 @@ export class SettingsPanel {
     const defaults = listAt(this.defaults, item.key);
     const mine = listAt(this.user, item.key);
     return v_flex().gap(6)
-      .child(heading(t, item.label))
+      // Reset: takes your additions off (the package's stay).
+      .child(headingWith(t, item.label,
+        resetButton(t, `reset-list-${i}`, `Remove your ${mine.length === 1 ? "addition" : `${mine.length} additions`}; the package's stay`,
+          (cx) => cx.spawn(async (cx) => this.save((o) => setList(o, item.key, []), cx)), mine.length > 0)))
       .child(div().text_size(11.5).text_color(t.muted).child(item.help))
       .when(Boolean(item.example), (el) => el.child(this.listExample(t, item)))
       .when(defaults.length + mine.length > 0, (el) => el.child(h_flex().flex_wrap().gap(5)
@@ -921,7 +970,10 @@ export class SettingsPanel {
         .child(div().flex_none().w(150).truncate().font_family(MONO).text_size(11.5).text_color(on ? t.foreground : t.dim).child(rule.id))
         .child(div().flex_1().min_w(0).truncate().text_size(11.5).text_color(on ? t.muted : t.dim).child(rule.what));
       return v_flex().mx(-9).rounded(6).border(1).border_color(open ? t.border : t.popover).when(open, (el) => el.bg(alpha(t.raised, "80")))
-        .child(h_flex().px(8).gap(8).items_center().child(head).child(toggle))
+        // Off is a change from the default (every rule starts on): Reset turns it back on.
+        .child(h_flex().px(8).gap(8).items_center().child(head)
+          .child(resetButton(t, `reset-rule-${rule.id}`, "Back to the default (on)", (cx) => this.toggleRule(rule.id, cx), !on))
+          .child(toggle))
         .when(open, (el) => el.child(v_flex().px(27).pb(10).gap(8)
           .child(div().text_size(11.5).text_color(t.foreground).child(rule.more))
           .child(div().text_size(10.5).font_semibold().text_color(t.dim).child("EXAMPLE"))

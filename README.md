@@ -86,6 +86,6 @@ and the `veroboard` entries from `~/.codex/hooks.json`.
 ## Development
 
 `./export.sh` copies your live setup into this folder. Tests: `node tests/rules.test.js`, `node tests/codex.test.js`, `node tests/guard.test.js`,
-`node tests/topbar.test.js` and `bash tests/install.test.sh`.
+`node tests/topbar.test.js`, `node tests/rows.test.js`, `node tests/view.test.js` and `bash tests/install.test.sh`.
 
 Pairs well with [Dusk](https://github.com/lukevers/herdr-dusk). MIT licensed.

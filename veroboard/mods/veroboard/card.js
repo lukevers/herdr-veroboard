@@ -8,7 +8,7 @@ import { h_flex, v_flex } from "gpui-base";
 // The board's display settings (Veroboard settings → Display; user, 2026-11-17): the package's defaults.json "board"
 // section, then yours from ~/.config/veroboard/config.json. Theme colors stay the theme's. Every copy loads them
 // (loadView) and reloads when the folder changes. These fallbacks match the package defaults.
-const VIEW_DEFAULTS = { cables: true, cablesThroughCards: 5, contextRamp: [50, 85], stuckMinutes: 15, glow: true, greyWhenSeen: true, doneTimer: true, activeRing: true, card: null, top: null, toastPlace: "top-right", toastArea: "board", noticeRead: "visit" };
+const VIEW_DEFAULTS = { cables: true, cablesThroughCards: 5, contextRamp: [50, 85], stuckTask: 15, stuckShell: 15, stuckMonitor: 30, waitTask: true, waitShell: true, waitMonitor: true, waitHelper: true, glow: true, greyWhenSeen: true, doneTimer: true, activeRing: true, card: null, top: null, toastPlace: "top-right", toastArea: "board", noticeRead: "visit", cableColors: "rainbow" };
 // Where the board's notifications pop up (Veroboard settings → Notifications): over the board or over the terminal
 // (toastArea: "board" or "terminal"), then a row and a column of that area, 3 × 3 (toastPlace).
 const TOAST_PLACES = ["top-left", "top-center", "top-right", "middle-left", "middle-center", "middle-right", "bottom-left", "bottom-center", "bottom-right"];
@@ -16,6 +16,8 @@ let VIEW = { ...VIEW_DEFAULTS, card: null, top: null };
 const viewFrom = (...layers) => {
   const v = { ...VIEW_DEFAULTS };
   for (const l of layers) for (const k of Object.keys(VIEW_DEFAULTS)) {
+    // An older config's one stuckMinutes, for every kind it doesn't set on its own (2026-11-18: one per kind now).
+    if (STUCK_KEYS.includes(k) && !Number.isFinite(l?.[k]) && Number.isFinite(l?.stuckMinutes)) { v[k] = l.stuckMinutes; continue; }
     const x = l?.[k];
     if (k === "card" || k === "top" ? Boolean(x) && typeof x === "object" : k === "contextRamp" ? Array.isArray(x) && x.length === 2 && x.every(Number.isFinite) : typeof x === typeof VIEW_DEFAULTS[k]) v[k] = x;
   }
@@ -23,7 +25,11 @@ const viewFrom = (...layers) => {
   v.top = topLayout(v.top);
   return v;
 };
-const stuckMs = () => Math.max(1, VIEW.stuckMinutes) * 60000;
+// How long background work may go without news before its time turns pink, by kind (Veroboard settings → Card →
+// Background work; user, 2026-11-18): a sub-agent and a shell it waits on since they started, a monitor since its last
+// event. A quiet CI monitor is normal for longer than a quiet sub-agent, so monitors default to 30 min, the rest 15.
+const STUCK_KEYS = ["stuckTask", "stuckShell", "stuckMonitor"];
+const stuckMs = (kind = "task") => Math.max(1, VIEW[{ task: "stuckTask", shell: "stuckShell", monitor: "stuckMonitor" }[kind] ?? "stuckTask"]) * 60000;
 
 // Waiting is Dusk's light blue (ansi 14). The stronger blue #8aa1f4 matched the worktree pill, so not that. Working is the theme's amber-orange (themes/dusk.json "working").
 const WAITING = "#91c7e3";
@@ -197,7 +203,16 @@ const makeLayout = (c, items, def) => {
   }
   return { lines, hidden };
 };
-const cardLayout = (c) => ({ ...makeLayout(c, CARD_ITEMS, CARD_DEFAULT), rows: !(c && typeof c === "object" && c.rows === false) });
+// The background work rows under a card, by kind (user, 2026-11-18): sub-agents (task), background shells (shell),
+// monitors (monitor), each shown or not. `rowKinds` holds them; `rows` says whether any shows. An older config's
+// `rows: false` means none, `rows: true` (or nothing) all.
+const ROW_KINDS = ["task", "shell", "monitor"];
+const cardLayout = (c) => {
+  const o = c && typeof c === "object" ? c : {};
+  const all = o.rows !== false;
+  const rowKinds = Object.fromEntries(ROW_KINDS.map((k) => [k, typeof o.rowKinds?.[k] === "boolean" ? o.rowKinds[k] : all]));
+  return { ...makeLayout(c, CARD_ITEMS, CARD_DEFAULT), rows: ROW_KINDS.some((k) => rowKinds[k]), rowKinds };
+};
 
 // ---------- The top bar's layout (Veroboard settings → Board; user, 2026-11-17) ----------
 // One line with a left and a right side (a gap between takes what's left), like a card's. The gear can't be hidden:
@@ -243,7 +258,8 @@ const topLayout = (c) => {
 //        decorate ((el, id) => el: the example's drag and drop), through (how much shows through, else VIEW's) }
 const renderCard = (m, t, o = {}) => {
   const layout = o.layout ?? VIEW.card ?? cardLayout(null);
-  const rows = layout.rows ? (m.rows ?? []) : [];
+  // Only the kinds shown (cardLayout's rowKinds).
+  const rows = layout.rows ? (m.rows ?? []).filter((r) => layout.rowKinds?.[r.kind] !== false) : [];
   const bars = rows.length;
   const color = m.color;
   const ctx = m.context ? gauge(t, m.context.pct) : null;
@@ -345,8 +361,8 @@ const renderCard = (m, t, o = {}) => {
     .when(i === bars - 1, (el) => el.rounded_b(6))
     .when(Boolean(o.onClick), (el) => el.cursor_pointer().on_click(o.onClick))
     .child(div().text_color(t.dim).text_size(11).child("↳"));
-  const age = (start, quietSince, canStick = true) => Number.isFinite(start)
-    ? div().flex_none().text_size(10).text_color(canStick && Date.now() - quietSince > stuckMs() ? t.blocked : t.muted).child(duration(Date.now() - start))
+  const age = (start, quietSince, canStick = true, kind = "task") => Number.isFinite(start)
+    ? div().flex_none().text_size(10).text_color(canStick && Date.now() - quietSince > stuckMs(kind) ? t.blocked : t.muted).child(duration(Date.now() - start))
     : null;
   const row = (r, i) => {
     // A sub-agent: a spinner, its type and label, how long it has run (Claude Code's startTime), to spot one that's stuck.
@@ -359,7 +375,7 @@ const renderCard = (m, t, o = {}) => {
     if (r.kind === "shell") return rowFrame(r, i, t.chrome)
       .child(svg("icons/shell.svg").size(10).text_color(t.ansi6).flex_none())
       .child(div().flex_1().min_w(0).truncate().text_size(10.5).text_color(r.muted ? t.muted : t.foreground).child(r.text))
-      .when(Number.isFinite(r.startTime), (el) => el.child(age(r.startTime, r.startTime, r.waits)));
+      .when(Number.isFinite(r.startTime), (el) => el.child(age(r.startTime, r.startTime, r.waits, "shell")));
     // A monitor (Claude Code's Monitor tool): a breathing Waiting dot, what it watches, its last event, and "14m / 30m":
     // how long it has run out of its timeout (Monitor kills it then, so not an ETA). Pink when quiet too long.
     const quiet = Number.isFinite(r.eventAt) ? r.eventAt : r.startTime;
@@ -369,7 +385,7 @@ const renderCard = (m, t, o = {}) => {
       .when(Boolean(r.event), (el) => el.child(div().flex_1().min_w(0).truncate().text_size(10).text_color(t.muted).child(`· ${r.event}`)))
       .when(!r.event, (el) => el.child(div().flex_1()))
       .child(h_flex().flex_none().gap(3).items_center().text_size(10)
-        .when(Number.isFinite(r.startTime), (el) => el.child(div().text_color(Date.now() - quiet > stuckMs() ? t.blocked : t.muted).child(duration(Date.now() - r.startTime))))
+        .when(Number.isFinite(r.startTime), (el) => el.child(div().text_color(Date.now() - quiet > stuckMs("monitor") ? t.blocked : t.muted).child(duration(Date.now() - r.startTime))))
         .when(Number.isFinite(r.expiresAt), (el) => el.child(div().text_color(t.dim)
           .child(Number.isFinite(r.startTime) ? `/ ${duration(r.expiresAt - r.startTime)}` : `${duration(r.expiresAt - Date.now())} TTL`))));
   };
@@ -379,5 +395,5 @@ const renderCard = (m, t, o = {}) => {
 export {
   VIEW, VIEW_DEFAULTS, TOAST_PLACES, viewFrom, setView, stuckMs, WAITING,
   alpha, dot, badge, modelBadge, effortBadge, mix, glass, gauge, duration, compactTokens, icon,
-  CARD_ITEMS, CARD_DEFAULT, cardLayout, renderCard, TOP_ITEMS, TOP_DEFAULT, topLayout, topItems, isAddedDivider, makeLayout,
+  CARD_ITEMS, CARD_DEFAULT, ROW_KINDS, cardLayout, renderCard, TOP_ITEMS, TOP_DEFAULT, topLayout, topItems, isAddedDivider, makeLayout,
 };

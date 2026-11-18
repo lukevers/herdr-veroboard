@@ -36,7 +36,16 @@ const disc = (x, y, r) => {
 };
 
 // Pink, green, blue, peach, purple, cyan, then the light pink and blue: neighbours in this order differ most.
-const cablePalette = (t) => [t.ansi1, t.ansi2, t.ansi4, t.ansi3, t.ansi5, t.ansi6, t.ansi13, t.ansi14].filter(Boolean);
+// `grey` (board.cableColors "grey", user 2026-11-18): shades between the theme's text and its canvas instead, light and
+// dark in turn, so cables next to each other still differ.
+const shade = (a, b, f) => {
+  const ch = (h, i) => parseInt(h.slice(1 + i * 2, 3 + i * 2), 16);
+  if (![a, b].every((c) => /^#[0-9a-fA-F]{6}/.test(c))) return a;
+  return "#" + [0, 1, 2].map((i) => Math.round(ch(a, i) + (ch(b, i) - ch(a, i)) * f).toString(16).padStart(2, "0")).join("");
+};
+const cablePalette = (t, grey = false) => grey
+  ? [0.1, 0.45, 0.25, 0.6, 0.18, 0.52, 0.33, 0.66].map((f) => shade(t.foreground, t.canvas ?? "#000000", f))
+  : [t.ansi1, t.ansi2, t.ansi4, t.ansi3, t.ansi5, t.ansi6, t.ansi13, t.ansi14].filter(Boolean);
 // A cable's line by its parent's generation (user, 2026-11-18): from a top-level agent solid, from that agent's child
 // dashed, from any deeper one dotted, so a family of families stays readable.
 const cableDash = (gen) => gen >= 3 ? [2.5, 4] : gen === 2 ? [8, 5] : null;

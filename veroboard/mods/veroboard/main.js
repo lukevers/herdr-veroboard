@@ -41,7 +41,7 @@ const noticePending = (n) => !n.agent && typeof n.action?.args?.terminal === "st
 const noticeUnread = (n) => Boolean(n.unread) || (!n.read && !n.seen && n.at > (Number(shared("veroboard.noticesSeen")) || 0));
 // Background work that runs this long with no news may be stuck, so its time turns pink. Sub-agents and
 // shells that wait: time since they started. Monitors: time since their last event (or their start).
-// (VIEW.stuckMinutes, 15 by default: stuckMs())
+// (VIEW.stuckTask / stuckShell / stuckMonitor, by kind: stuckMs(kind))
 // A card glows (one pulse) this long after its agent makes a sound: Herdr's chime, which plays when an agent turns
 // done (finished while you weren't looking) or blocked, or a Claude Code hook's sound, which writes a ping file
 // (~/.config/veroboard/state/pings/<terminal>.json, {"at": ms}) next to playing it.
@@ -267,14 +267,15 @@ export default class Board extends View {
     const since = a.status === "working" ? spaces().flatMap(s => s.tabs).find(tb => tb.id === a.tab)?.working_since : null;
     // Time in this lane. Working: the turn. Waiting: its oldest sub-agent, monitor or waiting shell (hc helpers have
     // no start time), pink when any of them looks stuck. Done: since it got here (shared "veroboard.doneSince").
+    // Only the kinds that keep a card in Waiting (VIEW.wait*), each with its own stuck time.
     const waitItems = state.key === "waiting" ? [
-      ...tasks.map(x => ({ start: x.startTime, quiet: x.startTime })),
-      ...monitorList.map(m => ({ start: m.startTime, quiet: Number.isFinite(m.eventAt) ? m.eventAt : m.startTime })),
-      ...shellList.filter(sh => sh.waits).map(sh => ({ start: sh.startTime, quiet: sh.startTime })),
+      ...(VIEW.waitTask !== false ? tasks : []).map(x => ({ kind: "task", start: x.startTime, quiet: x.startTime })),
+      ...(VIEW.waitMonitor !== false ? monitorList : []).map(m => ({ kind: "monitor", start: m.startTime, quiet: Number.isFinite(m.eventAt) ? m.eventAt : m.startTime })),
+      ...(VIEW.waitShell !== false ? shellList.filter(sh => sh.waits) : []).map(sh => ({ kind: "shell", start: sh.startTime, quiet: sh.startTime })),
     ].filter(x => Number.isFinite(x.start)) : [];
     const doneAt = (shared("veroboard.doneSince") ?? {})[a.address];
     const laneTime = since ? { text: duration(Date.now() - (since < 1e12 ? since * 1000 : since)), color: t.working }
-      : waitItems.length ? { text: duration(Date.now() - Math.min(...waitItems.map(x => x.start))), color: waitItems.some(x => Date.now() - x.quiet > stuckMs()) ? t.blocked : WAITING }
+      : waitItems.length ? { text: duration(Date.now() - Math.min(...waitItems.map(x => x.start))), color: waitItems.some(x => Date.now() - x.quiet > stuckMs(x.kind)) ? t.blocked : WAITING }
       : VIEW.doneTimer && state.key === "done" && Number.isFinite(doneAt) ? { text: duration(Date.now() - doneAt), color: state.color }
       : null;
     // Every Blocked card says why, with how long it has been so (see blockReason). Pink = your move; marigold = waiting
@@ -310,13 +311,16 @@ export default class Board extends View {
     });
   }
   // How many background bars hang under a card (same rules as card()): each is 22px under the 76px card.
+  // How many background work rows its card shows: only the kinds shown (Veroboard settings → Card; the rows are drawn
+  // by card.js, which filters the same way). Hidden kinds still count for its lane (column()).
   barCount(a) {
     if (!VIEW.card?.rows) return 0;
+    const k = VIEW.card.rowKinds ?? {};
     const sub = this.subs?.[a.address];
     const tasks = sub && Date.now() - sub.at < 30000 ? sub.tasks : [];
     const session = this.sessions?.[a.address];
     const monitors = (session?.monitorList ?? []).filter(m => !Number.isFinite(m.expiresAt) || m.expiresAt > Date.now());
-    return tasks.length + (session?.shellList ?? []).length + monitors.length;
+    return (k.task !== false ? tasks.length : 0) + (k.shell !== false ? (session?.shellList ?? []).length : 0) + (k.monitor !== false ? monitors.length : 0);
   }
   // What the filter box searches (user, 2026-11-17: anything with text on a card): its name, id, program, space,
   // folder (the whole path), branch and worktree, model, effort, window, lane, why it's in Blocked and who it waits on,
@@ -401,7 +405,7 @@ export default class Board extends View {
       cards.forEach((a, j) => { pos[a.address] = { lane: i, left: x, right: x + laneW, y: y + 38 }; y += heights[j] + 9; });
     });
     // Pink, green, blue, peach, purple, cyan, then the light pink and blue: neighbours in this order differ most.
-    const palette = cablePalette(t);
+    const palette = cablePalette(t, VIEW.cableColors === "grey");
     const shadows = [], bodies = [], jacks = [];
     // Siblings take colors in id order, so cables from one parent never match (a hash gave three the same pink).
     const kids = {};
@@ -489,7 +493,9 @@ export default class Board extends View {
     const monitors = (this.sessions?.[a.address]?.monitorList ?? []).filter(m => !Number.isFinite(m.expiresAt) || m.expiresAt > Date.now());
     const helpers = terminals().some(x => x.parent === a.address && x.state === "live");
     const waitShells = (this.sessions?.[a.address]?.shellList ?? []).some(sh => sh.waits === true);
-    if (tasks.length > 0 || monitors.length > 0 || helpers || waitShells) return "waiting";
+    // Each kind keeps the card in Waiting unless switched off (Veroboard settings → Card → Waiting; user, 2026-11-18).
+    if ((VIEW.waitTask !== false && tasks.length > 0) || (VIEW.waitMonitor !== false && monitors.length > 0)
+      || (VIEW.waitHelper !== false && helpers) || (VIEW.waitShell !== false && waitShells)) return "waiting";
     // Idle after messaging another agent and saying it waits for the answer (facts.js `awaiting`): stuck
     // until that agent replies, so Blocked rather than Done. The reply is a new prompt, which clears it.
     return this.awaiting(a) && !dismissed ? "blocked" : "done";
