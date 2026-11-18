@@ -813,7 +813,9 @@ export class SettingsPanel {
       : tab.key === "rules" ? this.rulesTab(t)
       : v_flex().gap(18).when(Boolean(tab.intro), (el) => el.child(callout(t, tab.intro, this.introShows(t, tab.key))))
         .when(Boolean(this.user), (el) => el.child(sections(t, tab.items.map((item) => this.list(t, item)))));
+    // A light accent border like the selected space chip's, so the dialog stands off the board (user, 2026-11-18).
     return v_flex().id("board-settings-panel").size_full().bg(t.popover).text_color(t.foreground)
+      .rounded(10).border(1).border_color(alpha(t.accent, "55"))
       .track_focus(this.handle)
       // Card or Board tab, an item picked in its layout editor: the arrow keys move it like the buttons (← → along its line and across sides,
       // ↑ ↓ a line). Keys typed in a text box stay there: those boxes hold the keyboard themselves.
