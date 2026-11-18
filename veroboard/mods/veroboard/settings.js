@@ -16,7 +16,7 @@
 import { div, svg, PathBuilder } from "gpui-kit";
 import { v_flex, h_flex, InputState, Input, TextareaState, Textarea, SliderState, Slider, SliderTrack, SliderIndicator, SliderThumb } from "gpui-base";
 import { theme, exec, home, readTextFile, writeTextFile, props, closeOverlay, agents, spaces, shared, setShared } from "herdr";
-import { TOAST_PLACES, CARD_ITEMS, cardLayout, renderCard, TOP_ITEMS, topLayout, topItems, badge } from "./card.js";
+import { TOAST_PLACES, CARD_ITEMS, cardLayout, renderCard, TOP_ITEMS, topLayout, topItems, badge, WAITING } from "./card.js";
 import { cablePalette, cableLayers, cableDash, paintAt } from "./cables.js";
 import { hint, pie, chip, newSpaceButton, gearButton, dividerLine, renderTopBar, bellButton, statPill, word } from "./topbar.js";
 
@@ -109,6 +109,8 @@ const TABS = [
   { key: "test", label: "Test" },
 ];
 const ITEMS = TABS.flatMap((tab) => tab.items ?? []);
+// Veroboard on GitHub: the header's GitHub button.
+const REPO = "https://github.com/lukevers/herdr-veroboard";
 // The Look switches' demos (Show, next to each): how long each plays on the example card.
 const DEMOS = { activeRing: { ms: 2500 }, glow: { ms: 2000 }, greyWhenSeen: { ms: 3200 }, doneTimer: { ms: 3600 } };
 const GROUPS = [
@@ -465,34 +467,53 @@ export class SettingsPanel {
   // cable runs behind, so "Cables through cards" shows. Drawn by the board's own card and cable code at their real
   // size; it follows the Patch cables switch, and the slider live while it's dragged.
   cableExample(t) {
-    const W = 720, H = 200, cw = 220, lane = (i) => i * 250;
+    // Real cards (372px, as the Card tab's example and a lane on a wide board), two lanes (user, 2026-11-18: same
+    // proportions as the board, not narrowed cards; three real lanes don't fit, and Herdr can't scale a drawing down).
+    // 12px in from the left, the board's 25px gutter, and 30px past the last lane, like the board's margin. The dialog
+    // is 852px wide to fit it (mod.json).
+    const cw = 372, lane = (i) => 12 + i * (cw + 25), W = lane(1) + cw + 30;
     const L = this.view("card");
     const through = this.live.cablesThroughCards ?? this.view("cablesThroughCards");
+    // Claude Code and Codex, as Herdr names them (user, 2026-11-18: show they work together).
+    const CLAUDE = { key: "claude", name: "Claude Code", icon: "icons/claude.svg", tint: false };
+    const CODEX = { key: "codex", name: "Codex", icon: "icons/codex.svg", tint: false };
     const card = (i, y, m) => div().absolute().left(lane(i)).top(y).w(cw).child(renderCard({
-      program: this.example(t).program, shown: false, flash: null, why: null, launched: 0, openedBy: null,
+      program: CLAUDE, shown: false, flash: null, why: null, launched: 0, openedBy: null,
       branch: { name: "main", worktree: false, state: null }, model: "Opus 5.5", effort: "high", window: 1000000, space: null, rows: [], ...m,
-    }, t, { layout: { ...L, rows: false }, through }));
-    // The parent's two plugs on its right edge, 13px apart (the higher child takes the higher one), as the board does.
-    const [c1, c2] = cablePalette(t);
+    }, t, { layout: L, through }));
+    // Placed as on the board: the lanes in the board's order (Waiting, Working), each lane's first card at the same
+    // top, a card under another 9px below it (76px, + 22 for each background row when the card shows them), and a
+    // cable meeting a card 38px down. A parent with two cables on one edge gives each a plug, 13px apart (the higher
+    // child takes the higher one); siblings take colors in id order, so each cable has its own.
+    //   A parent and two children on separate tasks (user, 2026-11-18: no child's child; tests aren't an agent of
+    //   their own): planner (Claude, waiting on CI) opened fix-login (Claude, with Codex implementing the fix: a
+    //   codex:codex-rescue sub-agent) and update-docs (Codex).
+    const now = Date.now(), rowH = L.rows ? 22 : 0;
+    const TOP = 12, MID = 38, NEXT = TOP + 76 + rowH + 9;
+    const H = NEXT + 76 + 12;
+    const palette = cablePalette(t), pick = (i) => palette[i % palette.length];
     const on = this.view("cables");
     const cables = on ? [
-      cableLayers(t, { x: cw, y: 37 }, { x: lane(2), y: 78 }, 1, -1, c1, H, W),
-      cableLayers(t, { x: cw, y: 50 }, { x: cw, y: 150 }, 1, 1, c2, H, W),
+      cableLayers(t, { x: lane(0) + cw, y: TOP + MID - 6.5 }, { x: lane(1), y: TOP + MID }, 1, -1, pick(0), H, W),
+      cableLayers(t, { x: lane(0) + cw, y: TOP + MID + 6.5 }, { x: lane(1), y: NEXT + MID }, 1, -1, pick(1), H, W),
     ] : [];
-    const divider = (i) => div().absolute().left(lane(i) - 15).top(4).bottom(4).w(1).bg(mixHex(t.canvas, t.border, 0.5));
+    const divider = (i) => div().absolute().left(lane(i) - 13).top(4).bottom(4).w(1).bg(mixHex(t.canvas, t.border, 0.5));
     // No line under it: the Patch cables switch and slider under it are about the same thing.
     return v_flex().gap(8).py(10)
-      .child(div().text_size(11.5).text_color(t.muted).child(on
-        ? "A patch cable runs from an agent to each agent it opened: here planner opened fix-login (two lanes over) and update-docs (in its own lane, so the cable loops down). api-tests isn't related: the cable runs behind it, and Cables through cards sets how much shows through."
-        : "Patch cables are off: nothing shows which agent opened which. (The Opened by badge on the Card tab can show it instead.)"))
+      // No description of the picture (user, 2026-11-18): it shows itself. Only a note when the cables are off.
+      .when(!on, (el) => el.child(div().text_size(11.5).text_color(t.muted)
+        .child("Patch cables are off: nothing shows which agent opened which. (The Opened by badge on the Card tab can show it instead.)")))
       .child(h_flex().justify_center().py(6).rounded(8).bg(t.canvas).border(1).border_color(t.border).overflow_hidden()
         .child(div().relative().w(W).h(H)
-          .child(divider(1)).child(divider(2))
+          .child(divider(1))
           .child(div().absolute().inset_0().children(cables.flatMap((c) => [...c.shadows, ...c.bodies])))
-          .child(card(0, 12, { address: "t22", name: "planner", color: t.working, laneTime: { text: "8m", color: t.working }, launched: 2, folder: "myapp", context: { pct: 41 } }))
-          .child(card(0, 112, { address: "t32", name: "update-docs", color: t.working, laneTime: { text: "1m", color: t.working }, openedBy: "t22", folder: "myapp", context: { pct: 9 } }))
-          .child(card(1, 96, { address: "t27", name: "api-tests", color: "#91c7e3", laneTime: { text: "5m", color: "#91c7e3" }, folder: "api", model: "Sonnet 5", effort: "high", context: { pct: 27 } }))
-          .child(card(2, 40, { address: "t31", name: "fix-login", color: t.done, laneTime: { text: "3m", color: t.done }, openedBy: "t22", folder: "myapp-login", context: { pct: 18 } }))
+          .child(card(0, TOP, { address: "t22", name: "planner", color: WAITING, laneTime: { text: "8m", color: WAITING }, launched: 2, folder: "myapp", context: { pct: 41 },
+            rows: [{ kind: "shell", text: "gh run watch", startTime: now - 8 * 60000, waits: true }] }))
+          .child(card(1, TOP, { address: "t27", name: "fix-login", color: t.working, laneTime: { text: "5m", color: t.working }, openedBy: "t22",
+            folder: "myapp-login", model: "Sonnet 5", context: { pct: 27 },
+            rows: [{ kind: "task", type: "codex:codex-rescue", text: "Implement the session fix from the spec", startTime: now - 2 * 60000 }] }))
+          .child(card(1, NEXT, { address: "t31", name: "update-docs", program: CODEX, color: t.working, laneTime: { text: "3m", color: t.working }, openedBy: "t22",
+            folder: "myapp", model: "gpt-6-astra", window: 400000, context: { pct: 18 } }))
           .child(div().absolute().inset_0().children(cables.flatMap((c) => c.jacks)))))
       .when(on, (d) => d.child(this.cableLegend(t)));
   }
@@ -936,6 +957,12 @@ export class SettingsPanel {
     const head = h_flex().h(44).flex_none().px(18).gap(10).items_center()
       .child(div().text_size(15).font_semibold().text_color(t.foreground).child("Veroboard settings"))
       .child(div().flex_1().min_w(0).truncate().text_size(11).text_color(t.dim).child(this.info?.config ?? ""))
+      // The project's page (user, 2026-11-18): docs, issues, updates. Opens in the browser.
+      .child(h_flex().id("br-github").h(26).px(10).gap(6).items_center().rounded(6).cursor_pointer()
+        .bg(t.raised).border(1).border_color(t.border).text_size(11.5).text_color(t.foreground).hover((s) => s.bg(alpha(t.accent, "26")).border_color(alpha(t.accent, "55")))
+        .tooltip(REPO.replace("https://", ""))
+        .on_click(() => exec("open", [REPO]).catch(() => {}))
+        .child(svg("mods/veroboard/github.svg").size(12).flex_none().text_color(t.muted)).child("GitHub"))
       .when(Boolean(this.info), (el) => el.child(h_flex().id("br-open").h(26).px(10).items_center().rounded(6).cursor_pointer()
         .bg(t.raised).border(1).border_color(t.border).text_size(11.5).text_color(t.foreground).hover((s) => s.bg(alpha(t.accent, "26")).border_color(alpha(t.accent, "55")))
         .tooltip("Open the file in your text editor")
