@@ -13,7 +13,7 @@ import { cablePalette, cableLayers } from "./cables.js";
 import { SYMBOL, hint, pie, chip, newSpaceButton, gearButton, dividerLine, renderTopBar, bellButton, statPill, word } from "./topbar.js";
 // Veroboard settings: this mod opened as a dialog (mod.open veroboard) is the settings panel, not a board.
 import { SettingsPanel } from "./settings.js";
-import { agents, spaces, panes, terminals, focused, props, run, openOverlay, closeOverlay, setAgentOrder, theme, keys, nextCommand, shared, setShared, window, layout, readTextFile, watchFolder, home, settings, exec } from "herdr";
+import { agents, spaces, panes, terminals, focused, appHome, props, run, openOverlay, closeOverlay, setAgentOrder, theme, keys, nextCommand, shared, setShared, window, layout, readTextFile, watchFolder, home, settings, exec } from "herdr";
 
 // The board's columns, by urgency. Herdr reports blocked, working, done (finished, not yet seen) and idle;
 // the board splits Herdr's done and idle by whether the agent still has something running for it:
@@ -119,7 +119,7 @@ export default class Board extends View {
     });
 
     // The cards and the header (its pie sorts agents into the same columns) both read the session files.
-    // What each Blocked rule looks for (~/.config/veroboard/core/classify.js --info), for the Blocked badge's hover text.
+    // What each Blocked rule looks for (agent/core/classify.js --info, in this mod's folder), for the Blocked badge's hover text.
     // The board copy drops expired notices (veroboard-toast adds them), which also redraws to take them off.
     // The notices over the terminal (toastArea "terminal"): a copy of this mod in a frameless window (syncToastWindow).
     // It only draws them; the board copy keeps them.
@@ -137,7 +137,7 @@ export default class Board extends View {
       try {
         // Node's path as facts.js recorded it: Herdr's exec doesn't see the shell's PATH (nvm, mise).
         const node = await readTextFile(`${home()}/.config/veroboard/state/node-path`).then(x => x.trim(), () => "node");
-        const r = await exec(node || "node", [`${home()}/.config/veroboard/core/classify.js`, "--info"], { timeout: 10000 });
+        const r = await exec(node || "node", [`${appHome()}/mods/veroboard/agent/core/classify.js`, "--info"], { timeout: 10000 });
         this.ruleWhy = Object.fromEntries((JSON.parse(r.stdout).builtins ?? []).map(b => Array.isArray(b) ? b : [b.id, b.what]));
         cx.notify();
       } catch (_) {}
@@ -213,7 +213,7 @@ export default class Board extends View {
         if (Number.isFinite(at)) pings[address] = at;
       } catch {}
 
-      // ~/.config/veroboard/adapters/claude/facts.js writes the sessions file.
+      // agent/adapters/claude/facts.js (in this mod's folder) writes the sessions file.
       try {
         const { pct, tokens, model, effort, window, shells, shellList, monitorList, launched, git, worktree, lastPrompt, awaiting } = JSON.parse(await readTextFile(`${home()}/.config/veroboard/state/sessions/${address}.json`));
         if (Number.isFinite(pct) && Number.isFinite(tokens) && typeof model === "string") {
@@ -258,7 +258,7 @@ export default class Board extends View {
     const shellList = session?.shellList ?? [];
     // A monitor past its expiry is gone even before the status line next runs.
     const monitorList = (session?.monitorList ?? []).filter(m => !Number.isFinite(m.expiresAt) || m.expiresAt > Date.now());
-    // Agents in their own tabs that another agent opened (herdr-app do tab.new …), from ~/.config/veroboard/adapters/claude/facts.js:
+    // Agents in their own tabs that another agent opened (herdr-app do tab.new …), from agent/adapters/claude/facts.js:
     // the opener's card counts the ones still live that are agents, the same ones its cables go to (a plain shell it
     // opened isn't counted: the badge said 3 next to 2 cables, user 2026-11-18).
     const live = addr => terminals().some(x => x.address === addr && x.state === "live") && agents().some(x => x.address === addr);
@@ -355,7 +355,8 @@ export default class Board extends View {
   // A lane's visible height and its cards' total height, in zoom-1 px, from the same numbers as the layout.
   async loadView() {
     const json = async (path) => { try { return JSON.parse(await readTextFile(path)); } catch (_) { return {}; } };
-    const defaults = await json(`${home()}/.config/veroboard/core/defaults.json`);
+    // The package's defaults ship in this mod's folder (agent/core); yours are ~/.config/veroboard/config.json.
+    const defaults = await json(`${appHome()}/mods/veroboard/agent/core/defaults.json`);
     const mine = await json(`${home()}/.config/veroboard/config.json`);
     setView(viewFrom(defaults.board, mine.board));
   }

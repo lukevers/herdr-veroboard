@@ -6,16 +6,17 @@
 // Tabs (user, 2026-11-17: one long scroll hid the rules at the bottom): Display, Card, Test, People, Asks, Patterns, Rules.
 // Display edits the config's "board" section (defaults: the package's defaults.json "board"); the board reloads it
 // when the folder changes. A setting equal to the default is removed from your file rather than written.
-// The rules live in ~/.config/veroboard/core (rules.js: the built-in rules, each with what it looks for, more detail and
+// The rules live in this mod's folder, agent/core (rules.js: the built-in rules, each with what it looks for, more detail and
 // an example; defaults.json: the package's lists). Your own additions are ~/.config/veroboard/config.json, which
 // this dialog edits: every list here is added to the defaults, and switching a built-in rule off writes its id to
 // blocked.disable. Each change is saved at once (a safe write: if the file changed on disk meanwhile, it reloads
-// instead). Agents pick it up on their next status-line run. The Test tab runs ~/.config/veroboard/core/classify.js,
+// instead). Agents pick it up on their next status-line run. The Test tab runs agent/core/classify.js,
 // so it always uses the saved rules.
 
 import { div, svg, PathBuilder } from "gpui-kit";
 import { v_flex, h_flex, InputState, Input, TextareaState, Textarea, SliderState, Slider, SliderTrack, SliderIndicator, SliderThumb } from "gpui-base";
-import { theme, exec, home, readTextFile, writeTextFile, props, closeOverlay, agents, spaces, shared, setShared } from "herdr";
+import { theme, exec, home, appHome, readTextFile, writeTextFile, props, closeOverlay, agents, spaces, shared, setShared, knownAgents, run } from "herdr";
+import { agentRoot, claudeStatus, claudeConnect, claudeDisconnect, codexStatus, codexConnect, codexDisconnect, codexHooksOn, codexHooksEnable } from "./agents.js";
 import { TOAST_PLACES, CARD_ITEMS, ROW_KINDS, cardLayout, renderCard, TOP_ITEMS, topLayout, topItems, badge, WAITING } from "./card.js";
 import { cablePalette, cableLayers, cableDash, paintAt } from "./cables.js";
 import { hint, pie, chip, newSpaceButton, gearButton, dividerLine, renderTopBar, bellButton, statPill, word } from "./topbar.js";
@@ -101,6 +102,7 @@ const TABS = [
   { key: "display", label: "Board" },
   { key: "card", label: "Card" },
   { key: "notices", label: "Notifications" },
+  { key: "agents", label: "Agents" },
   { key: "people", label: "People", items: [
     { key: ["people", "names"], label: "People", placeholder: "Add a name, then Enter",
       help: "If you add names, only these count as people an agent waits on. Empty: any capitalized name does. Agents like t22 always count.", example: "person" },
@@ -194,6 +196,7 @@ export class SettingsPanel {
       cx.timer.after(350, (cx) => { if (seq === this.testSeq) this.runTest(cx); });
     });
     cx.spawn(async (cx) => { await this.load(); cx.notify(); });
+    if (this.tab === "agents") this.loadAgents(cx);
   }
 
   // Node's path, as the board package's facts.js recorded it: Herdr's exec doesn't see the shell's PATH (nvm, mise).
@@ -204,10 +207,10 @@ export class SettingsPanel {
 
   async load() {
     try {
-      const r = await exec(await this.node(), [`${home()}/.config/veroboard/core/classify.js`, "--info"], { timeout: 10000 });
+      const r = await exec(await this.node(), [`${appHome()}/mods/veroboard/agent/core/classify.js`, "--info"], { timeout: 10000 });
       this.info = JSON.parse(r.stdout);
     } catch (e) {
-      this.status = `Can't run ~/.config/veroboard/core/classify.js (${e?.message ?? e}). Is the board package installed, and has an agent run since (it records where Node is)?`;
+      this.status = `Can't run the board's rules (agent/core/classify.js: ${e?.message ?? e}). Connect an agent on the Agents tab and let it run once: it records where Node is, which this needs.`;
       return;
     }
     try { this.defaults = JSON.parse(await readTextFile(this.info.defaults)); } catch { this.defaults = {}; }
@@ -824,7 +827,146 @@ export class SettingsPanel {
         .child(grid)), readSection], 10);
   }
 
-  select(tab, cx) { this.tab = tab; remember(tab); cx.notify(); }
+  select(tab, cx) { this.tab = tab; remember(tab); if (tab === "agents") this.loadAgents(cx); cx.notify(); }
+
+  // ---------- Agents: connect Claude Code and Codex (agents.js; user, 2026-11-18) ----------
+  // Their config files as they are now, whether each program is installed, and the change waiting for Apply.
+  agentFiles() {
+    const h = home();
+    return { claude: `${h}/.claude/settings.json`, codex: `${h}/.codex/hooks.json`, codexToml: `${h}/.codex/config.toml` };
+  }
+  loadAgents(cx) {
+    cx.spawn(async (cx) => {
+      const f = this.agentFiles(), read = async (p) => { try { return await readTextFile(p); } catch { return null; } };
+      const [claude, codex, codexToml] = await Promise.all([read(f.claude), read(f.codex), read(f.codexToml)]);
+      let installed = {}, runs = {};
+      try {
+        const known = await knownAgents();
+        installed = Object.fromEntries(known.map((a) => [a.key, Boolean(a.installed)]));
+        runs = Object.fromEntries(known.filter((a) => a.installed && Array.isArray(a.run) && a.run.length).map((a) => [a.key, a.run]));
+      } catch { /* unknown */ }
+      this.agentsNow = { claude, codex, codexToml, installed, runs };
+      cx.notify();
+    });
+  }
+  // What a click would change: shown first, written on Apply (a copy of each file is saved next to it first).
+  propose(agent, action, cx) {
+    const now = this.agentsNow ?? {}, f = this.agentFiles(), root = agentRoot(appHome(), home());
+    try {
+      if (agent === "claude") {
+        const r = action === "disconnect" ? claudeDisconnect(now.claude) : claudeConnect(now.claude, root);
+        this.pending = { agent, action, writes: [{ path: f.claude, before: now.claude, after: r.text }], changes: r.changes };
+      } else {
+        const r = action === "disconnect" ? codexDisconnect(now.codex) : codexConnect(now.codex, root);
+        const writes = [{ path: f.codex, before: now.codex, after: r.text }], changes = [...r.changes];
+        if (action !== "disconnect" && !codexHooksOn(now.codexToml)) {
+          writes.push({ path: f.codexToml, before: now.codexToml, after: codexHooksEnable(now.codexToml) });
+          changes.push("config.toml: [features] hooks = true (Codex runs hooks only with it)");
+        }
+        this.pending = { agent, action, writes, changes };
+      }
+    } catch (e) { this.pending = null; this.status = `Can't read ${agent === "claude" ? f.claude : f.codex}: ${e?.message ?? e}. Fix it by hand first.`; }
+    cx.notify();
+  }
+  applyPending(cx) {
+    const p = this.pending;
+    if (!p) return;
+    cx.spawn(async (cx) => {
+      const stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\..*/, "").replace("T", "-");
+      try {
+        for (const w of p.writes) {
+          if (w.before === w.after) continue;
+          if (w.before != null) await writeTextFile(`${w.path}.bak-veroboard-${stamp}`, w.before, null);
+          else await exec("mkdir", ["-p", w.path.replace(/\/[^/]*$/, "")]).catch(() => {});
+          await writeTextFile(w.path, w.after, w.before);
+        }
+        this.status = "";
+      } catch (e) {
+        this.status = `Not changed: ${e?.message ?? e}. The file may have changed meanwhile; look again and retry.`;
+      }
+      this.pending = null;
+      this.loadAgents(cx);
+      cx.notify();
+    });
+  }
+  // A settings file that isn't valid JSON can't be connected (the tab won't guess at it): an agent fixes it instead
+  // (user, 2026-11-18). A new tab with Claude Code (else Codex), told to fix only the syntax, back the file up first and
+  // show the fix before saving; the dialog closes so you see it.
+  askToFix(file, error) {
+    const runs = this.agentsNow?.runs ?? {}, argv = runs.claude ?? runs.codex;
+    if (!argv) { this.status = "No agent to ask: install Claude Code or Codex, or fix the file by hand."; return; }
+    const tilde = file.replace(home(), "~");
+    const task = `${tilde} isn't valid JSON (the parser says: ${error}), so Veroboard can't connect this agent to its board. `
+      + `Fix only what makes it invalid, so it parses as JSON again, and keep every setting in it as it is: don't add, remove or reorder anything else. `
+      + `First save a copy of the file as ${tilde}.bak-before-fix, then show me the fix before you save it. `
+      + `When it parses, tell me to reopen Veroboard's settings (the gear) → Agents.`;
+    run("tab.new", { name: "Fix agent settings", folder: home(), argv, task, focus: true });
+    closeOverlay(props()?.overlay);
+  }
+  agentsTab(t) {
+    const now = this.agentsNow;
+    if (!now) return div().text_size(11.5).text_color(t.muted).child("Looking at your agents' settings…");
+    const root = agentRoot(appHome(), home()), f = this.agentFiles(), tilde = (p) => p.replace(home(), "~");
+    const STATE = {
+      connected: ["Connected", t.done], old: ["Connected to an older copy", t.working], partial: ["Partly connected", t.working],
+      off: ["Not connected", t.muted], absent: ["Not installed", t.dim], broken: ["Settings file can't be read", t.blocked],
+    };
+    const PIECE = { current: ["✓", t.done, ""], old: ["↻", t.working, "older copy"], missing: ["–", t.dim, "missing"], foreign: ["✓", t.muted, "yours, kept"] };
+    const btn = (id, label, primary, act) => h_flex().id(id).h(26).px(10).items_center().rounded(6).cursor_pointer().text_size(11.5)
+      .bg(primary ? alpha(t.accent, "26") : t.raised).border(1).border_color(primary ? alpha(t.accent, "55") : t.border)
+      .text_color(primary ? t.accent : t.foreground).hover((s) => s.bg(alpha(t.accent, "26")).border_color(alpha(t.accent, "55")))
+      .on_click((_e, cx) => act(cx)).child(label);
+    const card = (agent, name, about, file, status, note) => {
+      const st = status.error ? "broken" : now.installed[agent] === false && status.state === "off" ? "absent" : status.state;
+      const [label, color] = STATE[st];
+      const open = this.pending?.agent === agent;
+      return v_flex().gap(10)
+        .child(h_flex().h(20).gap(10).items_center()
+          .child(div().flex_1().child(heading(t, name)))
+          .child(h_flex().h(20).px(8).gap(6).items_center().rounded(5).bg(alpha(color, "1f")).text_size(11).text_color(color)
+            .child(div().size(6).rounded(3).bg(color)).child(label)))
+        .child(div().text_size(11.5).text_color(t.muted).child(about))
+        .when(!status.error, (el) => el.child(h_flex().flex_wrap().gap(6).children(status.pieces.map((p) => {
+          const [mark, c, word] = PIECE[p.state];
+          return h_flex().h(22).px(8).gap(6).items_center().rounded(5).bg(t.background).border(1).border_color(t.border).text_size(11)
+            .child(div().text_color(c).child(mark)).child(div().text_color(t.foreground).child(p.label))
+            .when(Boolean(word), (el) => el.child(div().text_color(t.dim).child(word)));
+        }))))
+        .when(Boolean(note) && !status.error, (el) => el.child(div().text_size(11).text_color(t.dim).child(note)))
+        // Not valid JSON: what the parser says, and an agent to fix it (the tab doesn't touch a file it can't read).
+        .when(Boolean(status.error), (el) => el.child(h_flex().gap(10).items_center().px(12).py(9).rounded(8)
+          .bg(alpha(t.blocked, "14")).border(1).border_color(alpha(t.blocked, "55"))
+          .child(v_flex().flex_1().min_w(0).gap(2)
+            .child(div().text_size(11.5).text_color(t.foreground).child("This file isn't valid JSON, so it can't be connected from here."))
+            .child(div().text_size(11).font_family(MONO).text_color(t.muted).child(status.error)))
+          .child(btn(`ag-${agent}-fix`, "Ask an agent to fix it", true, () => this.askToFix(file, status.error)))))
+        .child(h_flex().gap(8).items_center()
+          .child(div().flex_1().text_size(11).text_color(t.dim).child(tilde(file)))
+          .when(!open && !status.error && st !== "connected", (el) => el.child(btn(`ag-${agent}-on`, st === "old" ? "Update" : "Connect", true, (cx) => this.propose(agent, "connect", cx))))
+          .when(!open && !status.error && st !== "off" && st !== "absent", (el) => el.child(btn(`ag-${agent}-off`, "Disconnect", false, (cx) => this.propose(agent, "disconnect", cx)))))
+        // The change, before it's made: what it will do, then Apply or Cancel.
+        .when(open, (el) => el.child(v_flex().gap(6).px(12).py(10).rounded(8).bg(t.background).border(1).border_color(alpha(t.accent, "55"))
+          .child(div().text_size(11.5).font_semibold().text_color(t.foreground)
+            .child(this.pending.changes.length ? `This changes ${this.pending.writes.filter((w) => w.before !== w.after).map((w) => tilde(w.path)).join(" and ")}:` : "Nothing to change."))
+          .children(this.pending.changes.map((c) => div().text_size(11).font_family(MONO).text_color(t.muted).child(`· ${c}`)))
+          .when(this.pending.changes.length > 0, (el) => el.child(div().text_size(11).text_color(t.dim).child("A copy of each file is saved next to it first (….bak-veroboard-<time>).")))
+          .child(h_flex().gap(8).justify_end()
+            .child(btn(`ag-${agent}-cancel`, "Cancel", false, (cx) => { this.pending = null; cx.notify(); }))
+            .when(this.pending.changes.length > 0, (el) => el.child(btn(`ag-${agent}-apply`, "Apply", true, (cx) => this.applyPending(cx)))))));
+    };
+    const safe = (fn, text) => { try { return fn(text, root); } catch (e) { return { error: String(e?.message ?? e), pieces: [] }; } };
+    return sections(t, [
+      v_flex().gap(6)
+        .child(heading(t, "Connect your agents"))
+        .child(div().text_size(11.5).text_color(t.muted)
+          .child("The board knows what an agent is doing (its model, context, why it's blocked, its sub-agents) from small scripts that come with it. Connecting an agent adds the lines that run them to its settings; Disconnect takes them out again.")),
+      card("claude", "Claude Code", "The status line (with yours kept after it), the sub-agent status line, and three hooks. Claude Code picks them up without a restart.",
+        f.claude, safe(claudeStatus, now.claude), null),
+      card("codex", "Codex", "Seven hooks. Codex runs hooks only when they're switched on in its config.toml; connecting does that too.",
+        f.codex, safe(codexStatus, now.codex),
+        now.codex && !codexHooksOn(now.codexToml) ? "Hooks are switched off in ~/.codex/config.toml: Connect switches them on." : "Codex loads hooks when a session starts, and asks you once to trust new ones."),
+    ]);
+  }
 
   // A rule's example, into the Test tab.
   tryExample(rule, cx) {
@@ -840,7 +982,7 @@ export class SettingsPanel {
     if (!text.trim()) { this.result = undefined; cx.notify(); return; }
     cx.spawn(async (cx) => {
       try {
-        const r = await exec(await this.node(), [`${home()}/.config/veroboard/core/classify.js`, text], { timeout: 10000 });
+        const r = await exec(await this.node(), [`${appHome()}/mods/veroboard/agent/core/classify.js`, text], { timeout: 10000 });
         if (seq !== this.testSeq) return;
         const out = JSON.parse(r.stdout);
         this.result = out.result;
@@ -1040,6 +1182,7 @@ export class SettingsPanel {
     const content = tab.key === "display" ? (this.user ? this.boardTab(t) : div())
       : tab.key === "card" ? (this.user ? this.cardTab(t) : div())
       : tab.key === "notices" ? (this.user ? this.noticesTab(t) : div())
+      : tab.key === "agents" ? this.agentsTab(t)
       : tab.key === "test" ? this.testTab(t)
       : tab.key === "rules" ? this.rulesTab(t)
       // A tab's intro is its first section, like the others (a heading, its text, what it shows), not a box above them

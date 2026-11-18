@@ -5,7 +5,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
-const guard = path.join(__dirname, '..', 'core', 'launch-guard.sh');
+const guard = path.join(__dirname, '..', 'veroboard', 'mods', 'veroboard', 'agent', 'core', 'launch-guard.sh');
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'veroboard-guard-'));
 let home, bin, failed = 0;
 

@@ -1,7 +1,7 @@
 // The rules and every config field: node tests/rules.test.js. Each config needs a fresh process (rules.js reads it once).
 const fs = require('fs'), os = require('os'), path = require('path');
 const { execFileSync } = require('child_process');
-const RULES = path.join(__dirname, '..', 'core', 'rules.js');
+const RULES = path.join(__dirname, '..', 'veroboard', 'mods', 'veroboard', 'agent', 'core', 'rules.js');
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'veroboard-test-'));
 const run = (config, code) => {
   const file = path.join(tmp, `config-${Math.random().toString(36).slice(2)}.json`);

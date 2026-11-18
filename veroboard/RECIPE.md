@@ -39,7 +39,7 @@ Top to bottom:
 - **Lanes.** Pinned by hand → Blocked. A dialog open in its tab → Blocked ("Prompt"). Herdr says working → Working.
   Idle with background work (sub-agents, monitors, shells that wait, helper terminals) → Waiting. Idle and its last
   message asks you something or says it waits on someone → Blocked ("You", or the name). Otherwise → Done.
-- **Blocked reasons** are decided by a rule set in `~/.config/veroboard/core/rules.js`; hovering the badge names the rule.
+- **Blocked reasons** are decided by a rule set in `mods/veroboard/agent/core/rules.js`; hovering the badge names the rule.
 - **Done** cards are green until you've looked at them, then grey. A card glows once when its agent finishes or asks.
 - The card whose terminal is on screen gets a 2px ring and a faint wash.
 - **Click** a card: focus that agent's terminal. **Right-click**: a menu with Pin to Blocked / Unpin, Move to Done (in
@@ -80,20 +80,29 @@ Top to bottom:
 - **Herdr:** `agents`, `spaces`, `panes`, `terminals`, `shared`/`setShared` (keys `veroboard.*`), `keys`, `nextCommand`,
   `openOverlay`, `setAgentOrder`, `readTextFile`, `writeTextFile`, `watchFolder`, `exec`; commands `agent.focus`,
   `tab.select`, `tab.rename`, `space.new`, `space.select`, `layout.resize`, `mod.open`.
-- **Claude Code side** (`adapters/claude/` in this repo, installed to `~/.config/veroboard/adapters/claude/`, with the rules in `core/`): `tap.js` wraps the status line and
+- **The agent scripts ship inside the board mod** (`mods/veroboard/agent/`: `core/` the rules and shared code,
+  `adapters/<agent>/` one folder each), so adding the layout copies them. The settings dialog's **Agents** tab
+  (`agents.js`, plain functions on file text) adds and removes the lines that run them: in `~/.claude/settings.json`
+  (the status line wrapping yours after `--`, the sub-agent status line, PreToolUse, Stop and Notification hooks) and
+  `~/.codex/hooks.json` (six event hooks and the guard; it also sets `[features] hooks = true` in `config.toml`). It
+  shows the change before Apply, saves `<file>.bak-veroboard-<time>` first, writes only if the file didn't change
+  meanwhile, and edits only its own script paths inside a command (a `; afplay …` after the ping stays).
+  A file that isn't valid JSON isn't touched: the card shows the parser's error and **Ask an agent to fix it**, which
+  opens a tab with Claude Code (else Codex) told to fix only the syntax, back the file up and show the fix first.
+- **Claude Code side** (`agent/adapters/claude/`): `tap.js` wraps the status line and
   writes each agent's facts to `~/.config/veroboard/state/sessions/<terminal>.json`; `subagents.js` (the sub-agent status line)
   writes `subagents/`; `ping.sh` (Stop and Notification hooks) writes `pings/`; `rules.js` + `defaults.json` are the
   Blocked rules; `classify.js` tests a message.
 - **Codex side** (`adapters/codex/hook.js`, hooks in `~/.codex/hooks.json`): on each prompt, tool call, permission
   request and stop it reads the Codex session log (model, effort, tokens, last message, launched terminals) and writes
-  the same sessions file. Shared code (git, writing the file, pings) is in `core/session.js`.
-- **Launch guard** (`core/launch-guard.sh` + `.js`, a `PreToolUse` hook for Claude and Codex): blocks `herdr-app do
+  the same sessions file. Shared code (git, writing the file, pings) is in `agent/core/session.js`.
+- **Launch guard** (`agent/core/launch-guard.sh` + `.js`, a `PreToolUse` hook for Claude and Codex): blocks `herdr-app do
   tab.new` without a space (exit 2, with the agent's own space id from `hc get`'s `herdr.space` label), so child agents
   open in their parent's space. Only a launch at a command's start counts, not text that mentions it. Fails open when
   unsure; other commands skip Node entirely.
 - **Programs and files outside the mod folder:** runs `node` (`classify.js`, for the dialog and the rules' hover text);
-  reads `~/.config/veroboard/state/`, `~/.config/veroboard/core/defaults.json` and `~/.config/veroboard/config.json`; the dialog writes
-  that config file.
+  reads `~/.config/veroboard/state/` and `~/.config/veroboard/config.json` (the dialog writes that one), and, from the
+  Agents tab, reads and (on Apply) writes `~/.claude/settings.json`, `~/.codex/hooks.json` and `~/.codex/config.toml`.
 
 ## Watch out
 
@@ -103,10 +112,11 @@ Top to bottom:
   (`role: "toasts"`) as a frameless window there, sized to the stack. It doesn't take the keyboard. Its place comes
   from the layout's sizes (the 52px header, the board's height, the workspace padding and tab strip): a layout with
   other sizes needs `syncToastWindow` changed to match.
-- **The board needs the Claude Code side.** Copying the layout and mods alone gives cards with no model, context or
-  Blocked reasons. Run `./install.sh` from the repo root and add its `~/.claude/settings.json` lines (see the README).
+- **The board needs its agents connected.** Copying the layout and mods alone gives cards with no model, context or
+  Blocked reasons until the Agents tab connects Claude Code or Codex.
 - Herdr runs programs without the shell's PATH. `facts.js` saves the path of the Node it runs under to
-  `~/.config/veroboard/state/node-path`, and the mods use it. Until an agent has run once after install, the dialog can't load.
+  `~/.config/veroboard/state/node-path`, and the mods use it. Until a connected agent has run once, the rules tabs can't
+  load (the Agents tab can: it needs no Node).
 - Mods can't import from another mod's folder, so the settings dialog lives inside `mods/veroboard`.
 - `herdr-app check` doesn't build the dialog. Open it to test it.
 - Card and cable positions are computed from the layout's numbers (lane padding, 27px header, 76px cards, 22px rows,

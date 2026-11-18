@@ -1,5 +1,5 @@
 {
-  "//": "Your Herdr board rules. Every list here is ADDED to the package's defaults (~/.config/veroboard/core/defaults.json); blocked.disable switches built-in rules off by id (ids: top of ~/.config/veroboard/core/rules.js). Changes apply on each agent's next status-line run.",
+  "//": "Your Herdr board rules. Every list here is ADDED to the package's defaults (defaults.json, in the board mod's folder: mods/veroboard/agent/core); blocked.disable switches built-in rules off by id (ids: top of mods/veroboard/agent/core/rules.js). Changes apply on each agent's next status-line run.",
   "people": {
     "//names": "Only these people count as someone an agent waits on ('Blocked · Luke'). Empty: any capitalized name does. Agents (t22) always count. Example: [\"Luke\", \"Sam\"]",
     "names": [],

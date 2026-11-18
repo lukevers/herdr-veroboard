@@ -10,7 +10,7 @@
  *   lastPrompt: when you last typed to it; awaiting: who its last message waits on (rules.js)
  *
  * Fed Claude Code's status-line JSON. Run it through tap.js (the statusLine wrapper), or call it from your own
- * status line: require('~/.config/veroboard/adapters/claude/facts.js')(data). Herdr sets HC_TERMINAL_ID in its terminals;
+ * status line: require('<board mod>/agent/adapters/claude/facts.js')(data). Herdr sets HC_TERMINAL_ID in its terminals;
  * elsewhere this does nothing.
  */
 const fs = require('fs');
@@ -283,7 +283,7 @@ function lastPrompt(path) {
 //  - to: "you" when its final message ends asking you something: a question near the end, or "tell me…", "say "go"",
 //    "reply with…", "your call", "on hold until…", "approve … and I'll …", "paste …". "Next: nothing needed" never counts.
 //    Mined 2026-11-04: 1049 of 1925 past turns end this way (scratchpad asks-test2.js).
-// The rules themselves (and your own additions) live in ~/.config/veroboard/core/rules.js, defaults.json and
+// The rules themselves (and your own additions) live in agent/core/rules.js and defaults.json (the board mod's folder), and
 // ~/.config/veroboard/config.json. awaiting.rule names the rule that decided it, for the board.
 let rules;
 try { rules = require('../../core/rules.js'); }

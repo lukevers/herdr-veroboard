@@ -4,7 +4,7 @@ const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
-const hook = path.join(__dirname, '..', 'adapters', 'codex', 'hook.js');
+const hook = path.join(__dirname, '..', 'veroboard', 'mods', 'veroboard', 'agent', 'adapters', 'codex', 'hook.js');
 const tmp = fs.mkdtempSync(path.join(__dirname, '.codex-test-'));
 const stamp = '2026-01-02T03:04:05.000Z';
 let home, bin, failed = 0;
@@ -110,7 +110,7 @@ function nothingWritten() {
 
 try {
   test('shared sessions read HOME at call time and skip unchanged facts', () => {
-    const session = require('../core/session.js');
+    const session = require('../veroboard/mods/veroboard/agent/core/session.js');
     const previousHome = process.env.HOME;
     try {
       process.env.HOME = home;
