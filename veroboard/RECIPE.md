@@ -14,8 +14,9 @@ If they don't work on your Herdr, or you want it different, build it again from 
 Top to bottom:
 
 1. **Header, 52px** (chrome color). Left: a gear button, a 100px filter box ("Filter", ⌘F hint), a 1px divider, then
-   space chips: "All Spaces ⌘1" and one per space (⌘2–⌘9), and a "+" for a new space. Right: "N agents across M spaces"
-   and a small pie of agent statuses. The order of these items is configurable.
+   space chips: "All Spaces ⌘1" and one per space (⌘2–⌘9), and a "+" for a new space. Right: a slim pill "14 agents", a
+   small pie of agent statuses, a second divider and a bell (a pill counts new notifications). The order of these items
+   is configurable.
 2. **Board, 355px** (canvas color, resizable; a grip below it). Four equal lanes, 24px side padding, 1px divider lines
    (halfway between canvas and border). Each lane has a 27px header: a status dot that breathes while the lane has live
    agents, the label (13px, semibold) and a count pill. Lane colors come from the theme: Blocked `blocked`, Working
@@ -60,6 +61,12 @@ Top to bottom:
   layout), `topbar.js` (header items), `cables.js` (cable drawing), `settings.js` (the dialog: opened with
   `mod.open veroboard`, shown when there's an `overlay` prop and no role), `names.js` (tab names).
 - **Mod `veroboard-menu`**: the right-click popup.
+- **Mod `veroboard-toast`**: the layout's `"toast"` (herdr-app#364), so Herdr hands it every notification. It puts each
+  one in shared `veroboard.notices` (shown in the board's top-right corner, light accent border, newest on top, at
+  most 3; a click runs its action, × dismisses, it times out) and `veroboard.noticeLog` (the last 50), then closes
+  Herdr's toast. Opened from the bell with `props.view: "history"`, it lists the log newest first (at least four rows tall): new ones on the popup's color,
+  then a sawtooth edge and the read ones (there at your last look, or clicked or dismissed on the board) darker and
+  dimmed.
 - **Shipped mods used:** `menu` (tab right-click), `new-menu` (the + button). Icons from `workspace-chrome` and `icons/`.
 - **Herdr:** `agents`, `spaces`, `panes`, `terminals`, `shared`/`setShared` (keys `veroboard.*`), `keys`, `nextCommand`,
   `openOverlay`, `setAgentOrder`, `readTextFile`, `writeTextFile`, `watchFolder`, `exec`; commands `agent.focus`,
@@ -81,6 +88,8 @@ Top to bottom:
 
 ## Watch out
 
+- The board draws notifications itself, so one that arrives while a dialog (like Veroboard settings) is open waits
+  under it. Herdr's own toasts float above dialogs.
 - **The board needs the Claude Code side.** Copying the layout and mods alone gives cards with no model, context or
   Blocked reasons. Run `./install.sh` from the repo root and add its `~/.claude/settings.json` lines (see the README).
 - Herdr runs programs without the shell's PATH. `facts.js` saves the path of the Node it runs under to

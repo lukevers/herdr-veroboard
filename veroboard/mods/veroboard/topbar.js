@@ -2,9 +2,9 @@
 // settings gear and the filter box, each placed where Veroboard settings → Board puts it (VIEW.top). main.js builds the
 // live pieces; the settings dialog builds look-alikes for its example. renderTopBar arranges either.
 import { div, svg, PathBuilder } from "gpui-kit";
-import { h_flex } from "gpui-base";
+import { h_flex, v_flex } from "gpui-base";
 import { keys } from "herdr";
-import { alpha, dot, mix, VIEW, topLayout } from "./card.js";
+import { alpha, dot, mix, VIEW, topLayout, isAddedDivider } from "./card.js";
 
 const SYMBOL = { cmd: "⌘", ctrl: "⌃", alt: "⌥", shift: "⇧" };
 
@@ -45,6 +45,30 @@ const chip = (t, label, selected = false, hotkey = "") => h_flex().h(27).px(11).
   .text_size(11).text_color(selected ? t.accent : t.muted).child(label)
   .when(hotkey !== "", el => el.child(div().text_size(10).text_color(selected ? alpha(t.accent, "99") : t.dim).child(hotkey)));
 
+// The notification bell (user, 2026-11-18): what Herdr notified, kept by mods/veroboard-toast; a click opens the list.
+// A small accent pill counts the ones since you last opened it.
+const bellButton = (t, unread = 0) => h_flex().id("board-bell").relative().size(27).flex_none().items_center().justify_center().rounded(6)
+  .cursor_pointer().bg(t.surface).border(1).border_color(unread ? alpha(t.accent, "55") : t.border).text_color(unread ? t.foreground : t.muted)
+  .tooltip("Notifications").hover((s) => s.bg(t.hover).text_color(t.foreground))
+  .child(svg("mods/veroboard/bell.svg").size(13))
+  .when(unread > 0, (el) => el.child(h_flex().absolute().top(-6).right(-7).min_w(15).h(15).px(4).rounded(8).items_center().justify_center()
+    .bg(t.accent).text_color(t.accent_foreground ?? t.canvas).text_size(9.5).font_semibold().child(unread > 9 ? "9+" : String(unread))));
+
+// The agent count: one slim pill as tall as the status pie (18px; user, 2026-11-18), like the cards' badges.
+// Segments are [strong, soft]: the number bright, its word muted, a thin divider between segments.
+//   14 agents (in the shown spaces)    filtering: 3 of 14 match
+const word = (n, w) => `${w}${n === 1 ? "" : "s"}`;
+// Its edge is the muted text color at a third, not the theme border: with that it blended into the bar and read
+// shorter than the pie beside it, though both are 18px (user, 2026-11-18).
+const statPill = (t, segments) => h_flex().flex_none().h(18).px(8).gap(7).items_center().rounded(9)
+  .bg(t.surface).border(1).border_color(alpha(t.muted, "55")).text_size(11)
+  .children(segments.flatMap(([strong, soft], i) => [
+    ...(i ? [div().w(1).h(9).bg(t.border)] : []),
+    h_flex().gap(3).items_center()
+      .when(strong !== "", (el) => el.child(div().font_semibold().text_color(t.foreground).child(strong)))
+      .when(soft !== "", (el) => el.child(div().text_color(t.muted).child(soft))),
+  ]));
+
 // The new-space button, the gear and the divider: the same in the bar and in the example.
 const newSpaceButton = (t) => h_flex().id("chip-new-space").size(27).flex_none().items_center().justify_center().rounded(6).cursor_pointer()
   .bg(t.surface).border(1).border_color(t.border).text_size(14).text_color(t.muted)
@@ -61,7 +85,8 @@ const dividerLine = (t) => div().w(1).h(17).flex_none().mx(4).bg(mix(t.canvas, t
 const renderTopBar = (pieces, t, o = {}) => {
   const layout = o.layout ?? VIEW.top ?? topLayout(null);
   const place = (id) => {
-    const el = pieces[id];
+    // A divider you added has no piece of its own: each gets a fresh line (elements are single-use).
+    const el = pieces[id] ?? (isAddedDivider(id) ? dividerLine(t) : null);
     if (!el) return null;
     if (!o.pick) return el;
     return div().id(`pick-${id}`).flex_none().when(id === "spaces", (d) => d.flex_shrink(1).min_w(0))
@@ -79,4 +104,4 @@ const renderTopBar = (pieces, t, o = {}) => {
     .children(line.right.map(place).filter(Boolean));
 };
 
-export { SYMBOL, hint, pie, chip, newSpaceButton, gearButton, dividerLine, renderTopBar };
+export { statPill, word, bellButton, SYMBOL, hint, pie, chip, newSpaceButton, gearButton, dividerLine, renderTopBar };

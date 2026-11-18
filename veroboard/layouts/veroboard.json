@@ -3,6 +3,7 @@
   "type": "column",
   "titlebar": "none",
   "preview": "mods/veroboard/preview.svg",
+  "toast": "veroboard-toast",
   "ui_font": "Geist",
   "background": "canvas",
   "terminal_padding": [

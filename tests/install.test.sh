@@ -13,7 +13,7 @@ check "launch guard installed executable" '[ -x "$HOME/.config/veroboard/core/la
 check "Claude launch guard snippet printed" 'grep -Fq "sh ~/.config/veroboard/core/launch-guard.sh claude" <<<"$out" && grep -Fq "PreToolUse" <<<"$out"'
 check "claude scripts installed" '[ -f "$HOME/.config/veroboard/adapters/claude/facts.js" ] && [ -x "$HOME/.config/veroboard/adapters/claude/tap.js" ] && [ -x "$HOME/.config/veroboard/adapters/claude/ping.sh" ]'
 check "rules file created" '[ -f "$HOME/.config/veroboard/config.json" ]'
-check "layout and mods installed" '[ -f "$APP/layouts/veroboard.json" ] && [ -f "$APP/mods/veroboard/main.js" ] && [ -f "$APP/mods/veroboard-menu/main.js" ] && [ -f "$APP/mods/veroboard/card.js" ] && [ -f "$APP/mods/veroboard/topbar.js" ] && [ -f "$APP/mods/veroboard/cables.js" ] && [ -f "$APP/mods/veroboard/settings.js" ]'
+check "layout and mods installed" '[ -f "$APP/layouts/veroboard.json" ] && [ -f "$APP/mods/veroboard/main.js" ] && [ -f "$APP/mods/veroboard-menu/main.js" ] && [ -f "$APP/mods/veroboard-toast/main.js" ] && [ -f "$APP/mods/veroboard/card.js" ] && [ -f "$APP/mods/veroboard/topbar.js" ] && [ -f "$APP/mods/veroboard/cables.js" ] && [ -f "$APP/mods/veroboard/settings.js" ]'
 check "your keys kept" 'node -e "const k=require(\"$APP/keys.json\");process.exit(k.global[\"cmd-t\"]===\"tab.new\"&&k[\"layout:veroboard\"][\"cmd-f\"]===\"something.else\"&&k[\"layout:veroboard\"][\"cmd-9\"]===\"veroboard.space8\"?0:1)"'
 check "key conflict reported" 'grep -q "Kept your own binding for: cmd-f" <<<"$out"'
 check "keys.json backed up" 'ls "$APP"/keys.json.bak-* >/dev/null 2>&1'

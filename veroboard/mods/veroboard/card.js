@@ -202,18 +202,32 @@ const cardLayout = (c) => ({ ...makeLayout(c, CARD_ITEMS, CARD_DEFAULT), rows: !
 const TOP_ITEMS = [
   { id: "spaces", label: "Spaces", help: "All Spaces and a chip for each space. Click one to show only its agents." },
   { id: "newSpace", label: "New space", help: "The + button that opens a new space." },
-  { id: "count", label: "Agent count", help: "How many agents, in how many spaces (or how many match the filter)." },
+  { id: "count", label: "Agent count", help: "How many agents are on the board (or how many match the filter)." },
   { id: "pie", label: "Status pie", help: "How the agents split between Blocked, Waiting, Working and Done." },
   { id: "divider", label: "Divider", help: "A short line, to set things apart." },
   { id: "gear", label: "Settings", help: "Opens these settings. It can be moved, not hidden.", locked: true },
   { id: "filter", label: "Filter box", help: "Filters the board by session name (⌘F)." },
+  { id: "bell", label: "Notifications", help: "A bell with what Herdr notified you about, newest first. The pill counts the new ones." },
 ];
 const TOP_DEFAULT = {
-  // The user's own arrangement (2026-11-17): settings and the filter first, then the spaces; count and pie on the right.
-  lines: [{ left: ["gear", "filter", "divider", "spaces", "newSpace"], right: ["count", "pie"] }],
+  // The user's own arrangement (2026-11-18): settings, the bell and the filter first, then the spaces; count and pie on
+  // the right; the second divider hidden.
+  lines: [{ left: ["gear", "bell", "filter", "divider", "spaces", "newSpace"], right: ["count", "pie"] }],
   hidden: [],
 };
-const topLayout = (c) => makeLayout(c, TOP_ITEMS, TOP_DEFAULT);
+// Dividers you add (user, 2026-11-18): "divider" ships with the bar; the editor's + Divider adds divider2, divider3, …
+// each placed wherever you drag it. An added one dragged into Hidden is removed, not kept in the tray.
+const isAddedDivider = (id) => /^divider\d+$/.test(id);
+const topItems = (c) => {
+  const ids = c && typeof c === "object" ? [...(c.lines ?? []).flatMap((l) => [...(l?.left ?? []), ...(l?.right ?? [])]), ...(c.hidden ?? [])] : [];
+  const added = [...new Set(ids.filter((id) => typeof id === "string" && isAddedDivider(id)))]
+    .sort((a, b) => Number(a.slice(7)) - Number(b.slice(7)));
+  return [...TOP_ITEMS, ...added.map((id) => ({ id, label: `Divider ${id.slice(7)}`, help: "A short line you added. Drag it into Hidden to remove it." }))];
+};
+const topLayout = (c) => {
+  const L = makeLayout(c, topItems(c), TOP_DEFAULT);
+  return { ...L, hidden: L.hidden.filter((id) => !isAddedDivider(id)) };
+};
 
 // One card (and the rows of background work under it) from a model. main.js card() builds the model from an agent;
 // the settings' example builds a made-up one.
@@ -362,5 +376,5 @@ const renderCard = (m, t, o = {}) => {
 export {
   VIEW, VIEW_DEFAULTS, viewFrom, setView, stuckMs, WAITING,
   alpha, dot, badge, modelBadge, effortBadge, mix, glass, gauge, duration, compactTokens, icon,
-  CARD_ITEMS, CARD_DEFAULT, cardLayout, renderCard, TOP_ITEMS, TOP_DEFAULT, topLayout, makeLayout,
+  CARD_ITEMS, CARD_DEFAULT, cardLayout, renderCard, TOP_ITEMS, TOP_DEFAULT, topLayout, topItems, isAddedDivider, makeLayout,
 };

@@ -10,7 +10,7 @@ import {
 // The patch cables' drawing (shared with the settings dialog's example).
 import { cablePalette, cableLayers } from "./cables.js";
 // The top bar's pieces and how they're arranged (Veroboard settings → Board).
-import { SYMBOL, hint, pie, chip, newSpaceButton, gearButton, dividerLine, renderTopBar } from "./topbar.js";
+import { SYMBOL, hint, pie, chip, newSpaceButton, gearButton, dividerLine, renderTopBar, bellButton, statPill, word } from "./topbar.js";
 // Veroboard settings: this mod opened as a dialog (mod.open veroboard) is the settings panel, not a board.
 import { SettingsPanel } from "./settings.js";
 import { agents, spaces, panes, terminals, props, run, openOverlay, setAgentOrder, theme, keys, nextCommand, shared, setShared, window, layout, readTextFile, watchFolder, home, settings, exec } from "herdr";
@@ -109,6 +109,13 @@ export default class Board extends View {
 
     // The cards and the header (its pie sorts agents into the same columns) both read the session files.
     // What each Blocked rule looks for (~/.config/veroboard/core/classify.js --info), for the Blocked badge's hover text.
+    // The board copy drops expired notices (veroboard-toast adds them), which also redraws to take them off.
+    if (!props()?.role) cx.timer.every(1000, () => {
+      const all = shared("veroboard.notices");
+      if (!Array.isArray(all) || !all.length) return;
+      const live = all.filter((n) => n && n.at + n.timeout > Date.now());
+      if (live.length !== all.length) setShared("veroboard.notices", live);
+    });
     if (!props()?.role) cx.spawn(async (cx) => {
       try {
         // Node's path as facts.js recorded it: Herdr's exec doesn't see the shell's PATH (nvm, mise).
@@ -514,6 +521,34 @@ export default class Board extends View {
   // ancestor, even when the parent sits in another lane (siblings opened by t22 stay side by side while t22 works).
   // Within a family a card goes right under its parent when that parent is in the lane (depth first, siblings in
   // the lane's own order). The family takes the slot of its highest member; cards with no relatives keep their place.
+  // Notifications Herdr handed to mods/veroboard-toast (shared "veroboard.notices"), newest on top, at most three, in
+  // the board's top-right corner. Each has the selected space chip's light accent border. A click runs its action
+  // (usually: go to that agent) and dismisses it; × only dismisses. The board copy drops expired ones (init).
+  noticeStack(t) {
+    const KEY = "veroboard.notices", now = Date.now();
+    const all = Array.isArray(shared(KEY)) ? shared(KEY) : [];
+    const list = all.filter((n) => n && n.at + n.timeout > now).slice(-3).reverse();
+    if (!list.length) return null;
+    // Clicked or dismissed counts as read: it shows dimmed in the bell's list and leaves the bell's count.
+    const drop = (id) => {
+      setShared(KEY, (Array.isArray(shared(KEY)) ? shared(KEY) : []).filter((x) => x && x.id !== id));
+      const log = Array.isArray(shared("veroboard.noticeLog")) ? shared("veroboard.noticeLog") : [];
+      if (log.some((x) => x && x.id === id && !x.read)) setShared("veroboard.noticeLog", log.map((x) => x && x.id === id ? { ...x, read: true } : x));
+    };
+    const DOT = { error: "blocked", warning: "working", success: "done", info: "accent" };
+    return v_flex().absolute().top(8).right(24).w(320).gap(8).children(list.map((n) => h_flex().id(`notice-${n.id}`)
+      .px(14).py(10).gap(11).items_center().rounded(10).bg(t.popover).border(1).border_color(alpha(t.accent, "55")).shadow_lg()
+      .cursor_pointer().hover((s) => s.bg(t.hover))
+      .on_click(() => { if (n.action?.name) run(n.action.name, n.action.args ?? {}); drop(n.id); })
+      .child(n.icon ? image(n.icon).w(16).h(16).flex_none() : div().size(8).rounded(4).flex_none().bg(t[DOT[n.level] ?? "accent"] ?? t.accent))
+      .child(v_flex().flex_1().min_w(0).gap(2)
+        .child(div().truncate().font_semibold().text_size(13).text_color(t.foreground).child(n.title))
+        .when(Boolean(n.body), (el) => el.child(div().truncate().text_size(12).text_color(t.muted).child(n.body))))
+      .child(div().id(`notice-x-${n.id}`).flex_none().px(5).rounded(4).text_size(13).text_color(t.dim).cursor_pointer()
+        .hover((s) => s.text_color(t.foreground).bg(t.raised))
+        .on_mouse_down("left", (_e, cx) => cx.stop_propagation())
+        .on_click((_e, cx) => { cx.stop_propagation(); drop(n.id); }).child("×"))));
+  }
   groupFamilies(cards) {
     const at = new Map(cards.map((a, i) => [a.address, i]));
     const parent = new Map();
@@ -602,7 +637,6 @@ export default class Board extends View {
     const shownTab = active?.tabs.find(tb => tb.active)?.id;
     const inTab = agents().filter(a => a.tab === shownTab);
     const shown = (inTab.find(a => a.focused) ?? inTab[0])?.address;
-    const count = `${scoped.length} agent${scoped.length === 1 ? "" : "s"}`;
     // One row: room for the macOS window buttons (the layout's traffic_lights), then the space chips.
     const w = window(), lights = layout()?.traffic_lights;
     const left = w?.platform === "macos" && w.titlebar === "none" && !w.fullscreen && lights ? lights[0] + 68 : 26;
@@ -623,12 +657,36 @@ export default class Board extends View {
           .on_mouse_down("right", () => openOverlay({ mod: "menu", kind: "popup", width: 200, height: 260, props: { tab: "space", target: { id: s.id } } }))))),
       // New space, as the sidebar's + does: Herdr names it after its first terminal's folder (rename by double-click).
       newSpace: newSpaceButton(t).on_click(() => run("space.new")),
-      count: div().flex_none().text_size(11).text_color(t.muted).child(query ? `${list.length} of ${scoped.length} match`
-        : scope === "space" && active ? `${count} in ${active.name}` : `${count} across ${allSpaces.length} space${allSpaces.length === 1 ? "" : "s"}`),
+      // Just the agents: the space chips already show the spaces and which is selected (user, 2026-11-18).
+      count: query ? statPill(t, [[String(list.length), `of ${scoped.length} match`]])
+        : statPill(t, [[String(scoped.length), word(scoped.length, "agent")]]),
       pie: pulse(t, scoped.map(a => ({ key: col.get(a.address), unseen: a.status === "done" }))),
       divider: dividerLine(t),
       // Veroboard settings (settings.js, opened as this mod's dialog; user, 2026-11-17).
       gear: gearButton(t).on_click(() => run("mod.open", { name: "veroboard" })),
+      // The notification list (mods/veroboard-toast, opened as a popup at the pointer). Opening it marks all as seen.
+      // Unread: newer than your last look at the list, and not clicked or dismissed on the board. The list gets the
+      // previous look's time, so what's new this time stays bright while it's open (the rest is dimmed).
+      // The list opens 8px below the bell, its left edge on the bell's left edge when the bell is on the bar's left
+      // side, its right edge on the bell's right edge on the right side (user, 2026-11-18). The press records where
+      // the bell is; without that (not painted yet) the popup opens at the pointer.
+      bell: bellButton(t, (Array.isArray(shared("veroboard.noticeLog")) ? shared("veroboard.noticeLog") : [])
+        .filter((n) => n && !n.read && n.at > (Number(shared("veroboard.noticesSeen")) || 0)).length)
+        .on_mouse_down("left", (e) => { this.bellBounds = e.bounds ?? null; })
+        .on_click(() => {
+          const seenBefore = Number(shared("veroboard.noticesSeen")) || 0;
+          setShared("veroboard.noticesSeen", Date.now());
+          // Exactly the list's size: a 40px header, 4 to 7 rows of 56px (+10 for the edge between new and read), a 1px
+          // border round it. Keep in step with mods/veroboard-toast (ROW_H, LIST_MIN, LIST_MAX, EDGE_H).
+          const log = (Array.isArray(shared("veroboard.noticeLog")) ? shared("veroboard.noticeLog") : []).filter(Boolean);
+          const read = log.filter((n) => n.read || n.at <= seenBefore).length;
+          const edge = read > 0 && read < log.length ? 10 : 0;
+          const height = 40 + Math.max(4 * 56, Math.min(7 * 56, log.length * 56 + edge)) + 2;
+          const b = this.bellBounds;
+          const onLeft = (VIEW.top?.lines ?? []).some((l) => l.left.includes("bell"));
+          const at = b ? { x: Math.max(0, onLeft ? b.x : b.x + b.width - 380), y: b.y + b.height + 8 } : undefined;
+          openOverlay({ mod: "veroboard-toast", kind: "popup", width: 380, height, ...(at ? { at } : {}), props: { view: "history", seenBefore } });
+        }),
       filter: h_flex().id("board-search").w(100).h(27).flex_none().px(9).gap(6).items_center().rounded(6)
         .tooltip("Matches anything on a card: name, id, model, effort, space, folder, branch, lane, why it's blocked, background work. Several words must all match.")
         .bg(t.surface).border(1).border_color(query ? alpha(t.accent, "55") : t.border)
@@ -672,6 +730,7 @@ export default class Board extends View {
     // A faint 1px line between columns (halfway from the background to the border color), with 12px on each side.
     const lanes = states.map(s => lane(s.key));
     const wires = this.wires(t, lanes);
+    const notices = this.noticeStack(t);
     const columns = h_flex().id("board-columns").relative().flex_1().min_h(0).px(24).pt(17).pb(6).gap(12)
       .on_size_change((sz, cx) => {
         if (sz.width === this.boardW && sz.height === this.boardH) return;
@@ -691,7 +750,8 @@ export default class Board extends View {
           .child(div().px(6).py(2).rounded(4).bg(state.wash).text_size(10).text_color(state.color).child(String(cards.length))))
         .child(this.laneBody(t, state.key, cards, cards.map(a => this.card(a, state, t, a.address === shown))))];
     }))
-      .child(wires.front);
+      .child(wires.front)
+      .when(Boolean(notices), (el) => el.child(notices));
     // A grip above the board's resize line: double-click puts the board back to its height in layouts/veroboard.json.
     const grip = h_flex().id("board-grip").h(11).flex_none().w_full().justify_center().items_center().cursor_pointer()
       .on_mouse_down("left", (e) => { if (e.click_count === 2) run("layout.resize", { id: "board-cards", px: BOARD_PX }); })

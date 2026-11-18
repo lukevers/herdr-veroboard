@@ -9,6 +9,7 @@ A Kanban board for your Claude Code and Codex agents, as a [Herdr](https://herdr
 - **Blocked says why:** a question for you, an open dialog, or who it's waiting on.
 - **⌘F** filters by anything on a card. **⌘1–⌘9** pick a space.
 - **Right-click** a card to pin it to Blocked or move it to Done.
+- **Notifications in the board's corner**, not over your terminal, and a **bell** with the history, newest first.
 - **Child agents stay in their parent's space:** an agent's new tab opens next to it, not in the space you're viewing.
 - **The gear** opens settings: arrange the card and top bar, tune the Blocked rules, test a message.
 
@@ -84,7 +85,7 @@ and the `veroboard` entries from `~/.codex/hooks.json`.
 
 ## Development
 
-`./export.sh` copies your live setup into this folder. Tests: `node tests/rules.test.js`, `node tests/codex.test.js` and
-`bash tests/install.test.sh`.
+`./export.sh` copies your live setup into this folder. Tests: `node tests/rules.test.js`, `node tests/codex.test.js`, `node tests/guard.test.js`,
+`node tests/topbar.test.js` and `bash tests/install.test.sh`.
 
 Pairs well with [Dusk](https://github.com/lukevers/herdr-dusk). MIT licensed.

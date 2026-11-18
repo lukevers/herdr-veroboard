@@ -16,9 +16,9 @@
 import { div, svg, PathBuilder } from "gpui-kit";
 import { v_flex, h_flex, InputState, Input, TextareaState, Textarea, SliderState, Slider, SliderTrack, SliderIndicator, SliderThumb } from "gpui-base";
 import { theme, exec, home, readTextFile, writeTextFile, props, closeOverlay, agents, spaces } from "herdr";
-import { CARD_ITEMS, cardLayout, renderCard, TOP_ITEMS, topLayout, badge } from "./card.js";
+import { CARD_ITEMS, cardLayout, renderCard, TOP_ITEMS, topLayout, topItems, badge } from "./card.js";
 import { cablePalette, cableLayers, cableDash, paintAt } from "./cables.js";
-import { hint, pie, chip, newSpaceButton, gearButton, dividerLine, renderTopBar } from "./topbar.js";
+import { hint, pie, chip, newSpaceButton, gearButton, dividerLine, renderTopBar, bellButton, statPill, word } from "./topbar.js";
 
 const ELSEWHERE = "#f2bc78"; // the board's marigold: waits on another agent or a person
 const MONO = "JetBrains Mono";
@@ -389,10 +389,10 @@ export class SettingsPanel {
   // The two editors: what they place, how their lines are named, what's fixed, and their example.
   editorOf(key) {
     return key === "top"
-      ? { key, items: TOP_ITEMS, noun: "item", lineName: () => "Bar", fixed: null, reset: "Reset the top bar to the default", heading: "Top bar",
+      ? { key, items: topItems(this.view("top")), noun: "item", lineName: () => "Bar", fixed: null, reset: "Reset the top bar to the default", heading: "Top bar",
           // Only the bar itself and the Hidden tray: dragging on the bar replaced the per-side boxes and buttons (user, 2026-11-17).
           barOnly: true,
-          intro: "The bar at the top of the board. Drag an item to another place on it, or into Hidden to take it off. The gear can be moved, not hidden.",
+          intro: "The bar at the top of the board. Drag an item to another place on it, or into Hidden to take it off. The gear can be moved, not hidden. + Divider adds a divider; drag one you added into Hidden to remove it.",
           preview: (t, o) => h_flex().h(52).px(14).items_center().rounded(8).bg(t.chrome).border(1).border_color(t.border).overflow_hidden()
             .child(renderTopBar(this.topExample(t), t, o)) }
       : { key, items: CARD_ITEMS, noun: "badge", lineName: (n) => `Line ${n + 1}`, fixed: "Name", reset: "Reset the card's layout to the default", heading: "Card layout",
@@ -480,16 +480,20 @@ export class SettingsPanel {
 
   // The top bar's example: the same pieces as the board's bar, with your spaces and agent count, made inert.
   topExample(t) {
-    const shown = spaces().slice(0, 2);
+    // All Spaces and your first space only, then a dim … when there are more: the editor needs room to move things
+    // around in (user, 2026-11-18).
+    const shown = spaces().slice(0, 1);
     return {
       spaces: h_flex().gap(7).items_center()
         .child(chip(t, "All Spaces", true, hint("veroboard.all")))
-        .children(shown.map((s, i) => chip(t, s.name, false, hint(`veroboard.space${i + 1}`)))),
+        .children(shown.map((s, i) => chip(t, s.name, false, hint(`veroboard.space${i + 1}`))))
+        .when(spaces().length > shown.length, (el) => el.child(div().text_size(12).text_color(t.dim).child("…"))),
       newSpace: newSpaceButton(t),
-      count: div().flex_none().text_size(11).text_color(t.muted).child(`${agents().length} agents across ${spaces().length} spaces`),
+      count: statPill(t, [[String(agents().length), word(agents().length, "agent")]]),
       pie: pie([{ color: t.blocked, n: 3 }, { color: "#55a9d3", n: 1 }, { color: t.working, n: 2 }, { color: t.done, n: 5 }], 18, (c) => c, t.chrome),
       divider: dividerLine(t),
       gear: gearButton(t),
+      bell: bellButton(t, 2),
       filter: h_flex().w(100).h(27).flex_none().px(9).gap(6).items_center().rounded(6).bg(t.surface).border(1).border_color(t.border)
         .child(div().flex_1().text_size(12).text_color(t.dim).child("Filter"))
         .when(hint("veroboard.search") !== "", (el) => el.child(div().flex_none().text_size(10).text_color(t.dim).child(hint("veroboard.search")))),
@@ -595,7 +599,19 @@ export class SettingsPanel {
       .when(Boolean(picked), (el) => el.child(div().text_size(11.5).text_color(t.foreground).child(`${picked.label}: ${picked.help}`)))
       .child(h_flex().gap(8).items_center()
         .child(div().w(52).flex_none().text_size(11.5).text_color(t.muted).child("Hidden"))
-        .child(zone(L.hidden, null, "hidden")))
+        .child(zone(L.hidden, null, "hidden"))
+        // Top bar: add a divider (divider2, divider3, …) at the end of the bar's left side, picked, to drag into place.
+        .when(key === "top", (el) => el.child(h_flex().id("add-divider").flex_none().h(26).px(10).items_center().rounded(6)
+          .cursor_pointer().text_size(11.5).bg(t.raised).border(1).border_color(t.border).text_color(t.foreground)
+          .hover((s) => s.bg(t.hover))
+          .on_click((_e, cx) => {
+            const cur = this.view("top");
+            const used = new Set([...cur.lines.flatMap((l) => [...l.left, ...l.right]), ...cur.hidden]);
+            let n = 2; while (used.has(`divider${n}`)) n++;
+            const next = { ...cur, lines: cur.lines.map((l, i) => i === 0 ? { ...l, left: [...l.left, `divider${n}`] } : l) };
+            this.picked = `divider${n}`;
+            this.setView("top", next, cx);
+          }).child("+ Divider"))))
       .when(Boolean(this.user?.board && Object.prototype.hasOwnProperty.call(this.user.board, key)), (el) => el.child(h_flex()
         .child(h_flex().id(`reset-layout-${key}`).h(26).px(10).items_center().rounded(6).cursor_pointer().text_size(11.5)
           .bg(t.raised).border(1).border_color(t.border).text_color(t.foreground).hover((s) => s.bg(t.hover))
