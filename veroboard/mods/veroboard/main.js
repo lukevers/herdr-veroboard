@@ -34,6 +34,10 @@ const stateColor = (t, key) => key === "waiting" ? WAITING : t[key];
 const noticeIn = (n, sp) => !sp || !n.agent || (n.agent.spaceId ? n.agent.spaceId === sp.id : !n.agent.space || n.agent.space === sp.name);
 // Unread: marked unread by hand (↺ in the list), or not read (clicked, dismissed, ✓, its agent visited), not seen in
 // the list when opening it marks them (noticeRead "open"), and newer than the old one-time mark (noticesSeen).
+// About an agent, and the board hasn't saved its card facts on it yet (enrichNotices). Not drawn until it has, so a
+// toast doesn't show in the plain style first and then change (user, 2026-11-18). The board saves them on the first
+// frame after one arrives; an agent that's gone gets {address} only, and the notice shows in the plain style.
+const noticePending = (n) => !n.agent && typeof n.action?.args?.terminal === "string";
 const noticeUnread = (n) => Boolean(n.unread) || (!n.read && !n.seen && n.at > (Number(shared("veroboard.noticesSeen")) || 0));
 // Background work that runs this long with no news may be stuck, so its time turns pink. Sub-agents and
 // shells that wait: time since they started. Monitors: time since their last event (or their start).
@@ -548,7 +552,7 @@ export default class Board extends View {
   enrichNotices() {
     const t = theme();
     const lists = ["veroboard.notices", "veroboard.noticeLog"].map((k) => [k, Array.isArray(shared(k)) ? shared(k) : []]);
-    const need = (n) => n && !n.agent && typeof n.action?.args?.terminal === "string";
+    const need = (n) => n && noticePending(n);
     if (!lists.some(([, l]) => l.some(need))) return;
     const snaps = {};
     const snap = (addr) => snaps[addr] ??= (() => {
@@ -589,7 +593,7 @@ export default class Board extends View {
     // or right. Newest nearest the edge it comes from: on top up top and in the middle, at the bottom down there.
     const [placeRow, col] = (TOAST_PLACES.includes(VIEW.toastPlace) ? VIEW.toastPlace : "top-right").split("-");
     const row = floating ? props()?.row ?? "top" : placeRow;
-    const live = all.filter((n) => n && n.at + n.timeout > now).slice(-3);
+    const live = all.filter((n) => n && n.at + n.timeout > now && !noticePending(n)).slice(-3);
     const list = row === "bottom" ? live : live.reverse();
     if (!list.length) return null;
     // Clicked or dismissed counts as read: it shows dimmed in the bell's list and leaves the bell's count.
@@ -667,7 +671,7 @@ export default class Board extends View {
   // strip (34) and a 10px gap, and its 28px header; 24px in from the window's sides and 10px off its bottom.
   syncToastWindow() {
     const id = shared("veroboard.toastWin"), now = Date.now();
-    const live = (Array.isArray(shared("veroboard.notices")) ? shared("veroboard.notices") : []).filter((n) => n && n.at + n.timeout > now).slice(-3);
+    const live = (Array.isArray(shared("veroboard.notices")) ? shared("veroboard.notices") : []).filter((n) => n && n.at + n.timeout > now && !noticePending(n)).slice(-3);
     let vp = null;
     try { vp = globalThis.window.viewport_size(); } catch (_) { /* not drawn yet */ }
     if (VIEW.toastArea !== "terminal" || !live.length || !this.rootH || !vp?.width) {
@@ -720,6 +724,12 @@ export default class Board extends View {
       const me = props()?.overlay;
       if (me && shared("veroboard.toastWin") !== me && !this.closing) { this.closing = true; cx?.timer?.after(0, () => closeOverlay(me)); }
       return div().size_full().p(12).on_mouse_down("left", (_e, cx) => cx.stop_propagation()).child(this.noticeStack(t, true) ?? div());
+    }
+    // A notice just arrived about an agent (veroboard-toast adds it and every mod redraws): the board copy saves the
+    // agent's card facts on it on the next frame, not on its 1s timer, so it shows in its card style at once.
+    if (!props()?.role && !this.enriching && (Array.isArray(shared("veroboard.notices")) ? shared("veroboard.notices") : []).some((n) => n && noticePending(n))) {
+      this.enriching = true;
+      cx?.timer?.after(0, () => { this.enriching = false; this.enrichNotices(); });
     }
     // Herdr chimes when an agent turns done or blocked: note when each card last did, to make it glow.
     const statusNow = Object.fromEntries(agents().map(a => [a.address, a.status]));
