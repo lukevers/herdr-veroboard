@@ -119,6 +119,8 @@ The badges, in their default order. The name always starts line 1.
 
 **Context bar**
 
+![The context bar's color ramp, changed and reset](docs/settings/context-bar.gif)
+
 | Setting | Key | Default | Choices | What it does |
 |---|---|---|---|---|
 | Color ramp | `contextRamp` | 50%, 85% | Two marks, 0–100% | Plain below the first mark, peach to red between them, fully red at the second. |
