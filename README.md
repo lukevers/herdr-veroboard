@@ -151,7 +151,11 @@ What keeps a card in Waiting after its turn ends. Off: the card goes to Done ins
 
 ### Notifications
 
+![A notification: cart-ui is done](docs/settings/notification.png)
+
 **Pop-up notifications**
+
+![Placement and Area, changed and reset](docs/settings/placement.gif)
 
 Send a test (Try it) shows a test notification where you picked. The dialog closes so you can see it.
 
@@ -161,6 +165,8 @@ Send a test (Try it) shows a test notification where you picked. The dialog clos
 | Placement | `toastPlace` | Top right | `top-left`, `top-center`, `top-right`, `middle-left`, `middle-center`, `middle-right`, `bottom-left`, `bottom-center`, `bottom-right` | The spot inside that area. The newest notification sits nearest the edge. The bell's list still opens under the bell. |
 
 **Read and unread**
+
+![The bell's list: two new notifications, two read](docs/settings/bell-list.png)
 
 | Setting | Key | Default | Choices | What it does |
 |---|---|---|---|---|
