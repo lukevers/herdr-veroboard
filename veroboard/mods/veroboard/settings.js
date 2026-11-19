@@ -583,14 +583,13 @@ export class SettingsPanel {
 
   // The top bar's example: the same pieces as the board's bar, with your spaces and agent count, made inert.
   topExample(t) {
-    // All Spaces and your first space only, then a dim … when there are more: the editor needs room to move things
-    // around in (user, 2026-11-18).
+    // All Spaces and your first space only: the editor needs room to move things around in (user, 2026-11-18). No … for
+    // the rest (user, 2026-11-19: it's an example; that there are more is obvious).
     const shown = spaces().slice(0, 1);
     return {
       spaces: h_flex().gap(7).items_center()
         .child(chip(t, "All Spaces", true, hint("veroboard.all")))
-        .children(shown.map((s, i) => chip(t, s.name, false, hint(`veroboard.space${i + 1}`))))
-        .when(spaces().length > shown.length, (el) => el.child(div().text_size(12).text_color(t.dim).child("…"))),
+        .children(shown.map((s, i) => chip(t, s.name, false, hint(`veroboard.space${i + 1}`)))),
       newSpace: newSpaceButton(t),
       count: statPill(t, [[String(agents().length), word(agents().length, "agent")]]),
       pie: pie([{ color: t.blocked, n: 3 }, { color: "#55a9d3", n: 1 }, { color: t.working, n: 2 }, { color: t.done, n: 5 }], 18, (c) => c, t.chrome),
