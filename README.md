@@ -54,7 +54,8 @@ Item IDs: `gear`, `bell`, `filter`, `divider` (added ones: `divider2`, `divider3
   <img src="docs/settings/cables-grey.png" alt="Patch cables in grey" width="49%">
 </p>
 
-> Left: Rainbow, cables through cards 5% (the default). Right: Grey, cables through cards 30%.
+> **Left:** Rainbow, cables through cards 5% (the default).<br>
+> **Right:** Grey, cables through cards 30%.
 
 | Setting | Key | Default | Choices | What it does |
 |---|---|---|---|---|
