@@ -515,9 +515,9 @@ export class SettingsPanel {
   cableExample(t) {
     // Real cards (372px, as the Card tab's example and a lane on a wide board), three lanes (user, 2026-11-19: with two,
     // no cable crossed a card, so the through-cards slider showed nothing; Herdr can't scale a drawing down).
-    // 12px in from the left, the board's 25px gutter, and 30px past the last lane, like the board's margin. The dialog
-    // is 1249px wide to fit it (mod.json).
-    const cw = 372, lane = (i) => 12 + i * (cw + 25), W = lane(2) + cw + 30;
+    // The board's 25px gutter, and 30px on both sides, like the board's right margin (user, 2026-11-19: even sides, for
+    // the README's screenshots too). The dialog is 1268px wide to fit it (mod.json).
+    const cw = 372, lane = (i) => 30 + i * (cw + 25), W = lane(2) + cw + 30;
     const L = this.view("card");
     const through = this.live.cablesThroughCards ?? this.view("cablesThroughCards");
     // Claude Code and Codex, as Herdr names them (user, 2026-11-18: show they work together).
