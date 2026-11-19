@@ -462,7 +462,8 @@ export class SettingsPanel {
           // Only the bar itself and the Hidden tray: dragging on the bar replaced the per-side boxes and buttons (user, 2026-11-17).
           barOnly: true,
           intro: "The bar at the top of the board. Drag an item to another place on it, or into Hidden to take it off. The gear can be moved, not hidden. + Divider adds a divider; drag one you added into Hidden to remove it.",
-          preview: (t, o) => h_flex().h(52).px(14).items_center().rounded(8).bg(t.chrome).border(1).border_color(t.border).overflow_hidden()
+          // About 18px of room around the bar, like the cable example below it (user, 2026-11-19: and the README's shot of it).
+          preview: (t, o) => h_flex().h(76).px(18).items_center().rounded(8).bg(t.chrome).border(1).border_color(t.border).overflow_hidden()
             .child(renderTopBar(this.topExample(t), t, o)) }
       : { key, items: CARD_ITEMS, noun: "badge", lineName: (n) => `Line ${n + 1}`, fixed: "Name", reset: "Reset the card's layout to the default", heading: "Card layout",
           // Like the top bar: only the example card (each side of each line takes a drop) and the Hidden tray (user, 2026-11-17).
@@ -509,15 +510,15 @@ export class SettingsPanel {
   }
 
   // What patch cables look like (user, 2026-11-17: few people know until their agents open agents): three lanes, an
-  // agent and two it opened (one in the next lane, one two lanes over), so the long cable runs behind the middle card
-  // and "Cables through cards" shows. Drawn by the board's own card and cable code at their real size; it follows the
-  // Patch cables switch, and the slider live while it's dragged.
+  // agent and two it opened (one two lanes over, one under it), and an unrelated agent in the middle lane that the
+  // cable runs behind, so "Cables through cards" shows. Drawn by the board's own card and cable code at their real
+  // size; it follows the Patch cables switch, and the slider live while it's dragged.
   cableExample(t) {
-    // Real cards (372px, as the Card tab's example and a lane on a wide board), three lanes (user, 2026-11-19: with two,
-    // no cable crossed a card, so the through-cards slider showed nothing; Herdr can't scale a drawing down).
-    // The board's 25px gutter, and 30px on both sides, like the board's right margin (user, 2026-11-19: even sides, for
-    // the README's screenshots too). The dialog is 1268px wide to fit it (mod.json).
-    const cw = 372, lane = (i) => 30 + i * (cw + 25), W = lane(2) + cw + 30;
+    // Real cards (372px, as the Card tab's example and a lane on a wide board), two lanes (user, 2026-11-18: same
+    // proportions as the board, not narrowed cards; three real lanes don't fit, and Herdr can't scale a drawing down).
+    // The board's 25px gutter, and 20px on both sides (user, 2026-11-19: even sides; 30 like the board's margin doesn't
+    // fit). The dialog is 852px wide (mod.json), which leaves 810px for it.
+    const cw = 372, lane = (i) => 20 + i * (cw + 25), W = lane(1) + cw + 20;
     const L = this.view("card");
     const through = this.live.cablesThroughCards ?? this.view("cablesThroughCards");
     // Claude Code and Codex, as Herdr names them (user, 2026-11-18: show they work together).
@@ -527,24 +528,22 @@ export class SettingsPanel {
       program: CLAUDE, shown: false, flash: null, why: null, launched: 0, openedBy: null,
       branch: { name: "main", worktree: false, state: null }, model: "Opus 5.5", effort: "high", window: 1000000, space: null, rows: [], ...m,
     }, t, { layout: L, through }));
-    // Placed as on the board: the lanes in the board's order (Waiting, Working, Done), each lane's first card at the same
-    // top (76px, + 22 for each background row when the card shows them), and a
+    // Placed as on the board: the lanes in the board's order (Waiting, Working), each lane's first card at the same
+    // top, a card under another 9px below it (76px, + 22 for each background row when the card shows them), and a
     // cable meeting a card 38px down. A parent with two cables on one edge gives each a plug, 13px apart (the higher
     // child takes the higher one); siblings take colors in id order, so each cable has its own.
     //   A parent and two children on separate tasks (user, 2026-11-18: no child's child; tests aren't an agent of
     //   their own): planner (Claude, waiting on CI) opened fix-login (Claude, with Codex implementing the fix: a
-    //   codex:codex-rescue sub-agent) and update-docs (Codex, done).
+    //   codex:codex-rescue sub-agent) and update-docs (Codex).
     // A row adds 22px when its kind shows: planner's is a shell, fix-login's a sub-agent.
     const now = Date.now(), rowH = L.rows && L.rowKinds.task ? 22 : 0;
-    // The board is just the cards' height. The long cable hangs as it would on a board 70px tall (its sag stops at
-    // 1.2 × the height): it runs straight behind fix-login's middle, so "Cables through cards" shows (user, 2026-11-19).
-    const TOP = 12, MID = 38, TAUT = 70;
-    const H = TOP + 76 + rowH + 12;
+    const TOP = 12, MID = 38, NEXT = TOP + 76 + rowH + 9;
+    const H = NEXT + 76 + 12;
     const palette = cablePalette(t, this.view("cableColors") === "grey"), pick = (i) => palette[i % palette.length];
     const on = this.view("cables");
     const cables = on ? [
       cableLayers(t, { x: lane(0) + cw, y: TOP + MID - 6.5 }, { x: lane(1), y: TOP + MID }, 1, -1, pick(0), H, W),
-      cableLayers(t, { x: lane(0) + cw, y: TOP + MID + 6.5 }, { x: lane(2), y: TOP + MID }, 1, -1, pick(1), TAUT, W),
+      cableLayers(t, { x: lane(0) + cw, y: TOP + MID + 6.5 }, { x: lane(1), y: NEXT + MID }, 1, -1, pick(1), H, W),
     ] : [];
     const divider = (i) => div().absolute().left(lane(i) - 13).top(4).bottom(4).w(1).bg(mixHex(t.canvas, t.border, 0.5));
     // No line under it: the Patch cables switch and slider under it are about the same thing.
@@ -554,14 +553,14 @@ export class SettingsPanel {
         .child("Patch cables are off: nothing shows which agent opened which. (The Opened by badge on the Card tab can show it instead.)")))
       .child(h_flex().justify_center().py(6).rounded(8).bg(t.canvas).border(1).border_color(t.border).overflow_hidden()
         .child(div().relative().w(W).h(H)
-          .child(divider(1)).child(divider(2))
+          .child(divider(1))
           .child(div().absolute().inset_0().children(cables.flatMap((c) => [...c.shadows, ...c.bodies])))
           .child(card(0, TOP, { address: "t22", name: "planner", color: WAITING, laneTime: { text: "8m", color: WAITING }, launched: 2, folder: "myapp", context: { pct: 41 },
             rows: [{ kind: "shell", text: "gh run watch", startTime: now - 8 * 60000, waits: true }] }))
           .child(card(1, TOP, { address: "t27", name: "fix-login", color: t.working, laneTime: { text: "5m", color: t.working }, openedBy: "t22",
             folder: "myapp-login", model: "Sonnet 5", context: { pct: 27 },
             rows: [{ kind: "task", type: "codex:codex-rescue", text: "Implement the session fix from the spec", startTime: now - 2 * 60000 }] }))
-          .child(card(2, TOP, { address: "t31", name: "update-docs", program: CODEX, color: t.done, laneTime: { text: "3m", color: t.done }, openedBy: "t22",
+          .child(card(1, NEXT, { address: "t31", name: "update-docs", program: CODEX, color: t.working, laneTime: { text: "3m", color: t.working }, openedBy: "t22",
             folder: "myapp", model: "gpt-6-astra", window: 400000, context: { pct: 18 } }))
           .child(div().absolute().inset_0().children(cables.flatMap((c) => c.jacks)))))
       .when(on, (d) => d.child(this.cableLegend(t)));

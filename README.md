@@ -41,6 +41,10 @@ Every setting below is in the gear's dialog, one table per tab. Each change save
 
 **Top bar**
 
+![The top bar](docs/settings/top-bar.png)
+
+> The default top bar.
+
 | Setting | Key | Default | Choices | What it does |
 |---|---|---|---|---|
 | Top bar | `top` | Left: gear, bell, filter, divider, spaces, new space. Right: count, pie. | Drag items between left, right and Hidden. + Divider adds more. | Which items show in the top bar, and where. The gear can't be hidden. |
