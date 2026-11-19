@@ -23,16 +23,18 @@ const mix = (a, b, f) => {
   return p && q ? "#" + p.map((v, i) => Math.round(v + (q[i] - v) * f).toString(16).padStart(2, "0")).join("") : a;
 };
 // The edge between new and read notifications: a sawtooth, like a torn receipt, filled with the read part's darker color,
-// in a 10px band of its own (the rows keep their full height). Over the 3px stripe column, a block in the popup's own
-// color cuts the teeth off, so the break in the stripes reads as a divider (user, 2026-11-19: the stripes and teeth
-// running into each other there looked like a glitch; overlapping a row took room from it).
-const sawtooth = (color, cut, w = 380, h = EDGE_H, tooth = 16) => {
+// in a 10px band of its own (the rows keep their full height). In the 3px stripe column, the stripe above runs halfway
+// down and the one below halfway up (dimmed like its row), so the stripes don't break there (user, 2026-11-19: a gap
+// looked broken; overlapping a row took room from it; a colored block didn't read as a divider). `above`/`below`: the
+// stripe colors, or null for a notice without one.
+const sawtooth = (color, above, below, w = 380, h = EDGE_H, tooth = 16) => {
   const pts = [[0, h], [0, h / 2]];
   for (let x = 0; x < w; x += tooth) pts.push([x + tooth / 2, 0], [Math.min(w, x + tooth), h / 2]);
   pts.push([w, h]);
   return div().relative().w_full().h(h).flex_none()
     .child(globalThis.window.paint_path(PathBuilder.fill().add_polygon(pts, true).build(), color).absolute().top(0).left(0).size_full())
-    .child(div().absolute().left(0).top(0).bottom(0).w(3).bg(cut));
+    .when(Boolean(above), (el) => el.child(div().absolute().left(0).top(0).w(3).h(h / 2).bg(above)))
+    .when(Boolean(below), (el) => el.child(div().absolute().left(0).top(h / 2).w(3).h(h / 2).bg(below).opacity(0.45)));
 };
 // A card-style badge (as card.js badge()): 16px, the theme's raised color unless given, an optional 10px icon, mono for ids.
 // `shrink`: gives way first when the line runs out of room, its text cut with … (the branch, so the parent still shows).
@@ -148,6 +150,8 @@ export default class VeroboardToast extends View {
         .child(btn(`log-mk-${n.id}`, r ? "↺" : "✓", r ? "Mark as unread" : "Mark as read", () => mark([n.id], !r)))
         .child(btn(`log-rm-${n.id}`, "×", "Remove", () => remove(n.id)));
     };
+    // A notice's stripe color: its why's, for one about an agent (the row draws it); none otherwise.
+    const stripe = (n) => (n?.agent?.name ? n.agent.why?.color ?? t.accent : null);
     const row = (n) => h_flex().id(`log-${n.id}`).relative().h(ROW_H).flex_none().pl(14).pr(8).gap(11).items_center()
       .when(!(n === fresh[fresh.length - 1] && read.length > 0), (el) => el.border_b(1).border_color(t.border))
       .when(isRead(n), (el) => el.opacity(this.hover === n.id ? 0.8 : 0.45))
@@ -218,7 +222,7 @@ export default class VeroboardToast extends View {
         // The height the bell sized the popup for; it stays when you pick another space (the list scrolls).
         ? v_flex().id("log-list").h(Number(p.listH) || Math.max(LIST_MIN, Math.min(LIST_MAX, log.length * ROW_H + (fresh.length && read.length ? EDGE_H : 0)))).overflow_y_scrollbar()
           .children(fresh.map(row))
-          .when(fresh.length > 0 && read.length > 0, (el) => el.child(sawtooth(dark, bodyBg(t))))
+          .when(fresh.length > 0 && read.length > 0, (el) => el.child(sawtooth(dark, stripe(fresh[fresh.length - 1]), stripe(read[0]))))
           // The read part runs to the bottom, so a short list doesn't end in a lighter strip.
           .when(read.length > 0, (el) => el.child(v_flex().flex_grow(1).flex_shrink_0().bg(dark).children(read.map(row))))
         : div().h(Number(p.listH) || LIST_MIN).p(18).text_size(12).text_color(t.muted)
