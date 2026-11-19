@@ -223,9 +223,6 @@ JavaScript regular expressions, case-insensitive, for what plain phrases can't s
 
 The built-in rules, each with a switch. Switching one off adds its ID to `blocked.disable` (default: empty).
 
-<details>
-<summary>All 29 built-in rules</summary>
-
 | ID | Group | What it looks for |
 |---|---|---|
 | `named-wait` | Waits on someone | Its Next line says it waits for someone |
@@ -258,7 +255,6 @@ The built-in rules, each with a switch. Switching one off adds its ID to `blocke
 | `pick-one` | Asks you | "pick one", "choose between", "which option" |
 | `send-wait` | Waits on someone | After hc send, it says it waits for the answer |
 
-</details>
 
 ## How it works
 
