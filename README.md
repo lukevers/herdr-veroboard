@@ -43,8 +43,6 @@ Every setting below is in the gear's dialog, one table per tab. Each change save
 
 ![The top bar](docs/settings/top-bar.png)
 
-> The default top bar.
-
 | Setting | Key | Default | Choices | What it does |
 |---|---|---|---|---|
 | Top bar | `top` | Every item shown, in the places listed below. | Drag items between left, right and Hidden. + Divider adds more. | Which items show in the top bar, and where. The gear can't be hidden. |
@@ -82,9 +80,24 @@ The items, in their default order:
 
 | Setting | Key | Default | Choices | What it does |
 |---|---|---|---|---|
-| Card layout | `card` | Line 1 right: lane time, Blocked reason, agents it opened, terminal id. Line 2: folder · branch. Line 3: model, effort, window · space, context bar. Hidden: opened by. | Drag badges between three lines (left and right side each) and Hidden. | What each card shows, and where. The name always leads line 1. |
+| Card layout | `card` | Every badge but Opened by, in the places listed below. | Drag badges between three lines (left and right side each) and Hidden. | What each card shows, and where. |
 
-Badge IDs: `laneTime`, `why`, `launched`, `address`, `openedBy`, `folder`, `branch`, `model`, `effort`, `window`, `space`, `context`.
+The badges, in their default order. The name always starts line 1.
+
+| Badge | ID | Default place | What it shows |
+|---|---|---|---|
+| Time in lane | `laneTime` | Line 1, right, 1st | Working: this turn. Waiting: its oldest background work. Done: how long it has been in Done. |
+| Blocked reason | `why` | Line 1, right, 2nd | Why it's in Blocked (You, Prompt, Pinned, or who it waits on) and for how long. Hover it to see the rule. |
+| Agents it opened | `launched` | Line 1, right, 3rd | How many agents it opened that still run. |
+| Terminal ID | `address` | Line 1, right, 4th | Its Herdr terminal ID (`t21`): what `hc` and other agents call it. |
+| Opened by | `openedBy` | Hidden | The terminal ID of the agent that opened it, while that agent runs. Hover it to see that agent's name. Useful with patch cables off. Shown, it goes to line 1, right. |
+| Folder | `folder` | Line 2, left | The last folder of where it runs. |
+| Branch | `branch` | Line 2, right | Its git branch. Blue with a layers icon in a worktree. A merge or rebase in progress shows next to it. |
+| Model | `model` | Line 3, left, 1st | The model, in a color of its own. |
+| Effort | `effort` | Line 3, left, 2nd | The reasoning effort. |
+| Context window | `window` | Line 3, left, 3rd | The context window's size (200k, 1M). |
+| Space | `space` | Line 3, right, 1st | Its Herdr space. Not shown while the board shows one space. |
+| Context bar | `context` | Line 3, right, 2nd | How full its context is. The colors follow the context bar's color ramp, below. |
 
 **Look**
 
