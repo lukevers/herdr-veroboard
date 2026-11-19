@@ -49,13 +49,11 @@ Item IDs: `gear`, `bell`, `filter`, `divider` (added ones: `divider2`, `divider3
 
 **Patch cables**
 
-<p>
-  <img src="docs/settings/cables-rainbow.png" alt="Patch cables in rainbow colors" width="49%">
-  <img src="docs/settings/cables-grey.png" alt="Patch cables in grey" width="49%">
-</p>
+![Patch cables in rainbow colors](docs/settings/cables-rainbow.png)
+![Patch cables in grey](docs/settings/cables-grey.png)
 
-> **Left:** Rainbow, cables through cards 5% (the default).<br>
-> **Right:** Grey, cables through cards 30%.
+> **Top:** Rainbow, cables through cards 5% (the default).<br>
+> **Bottom:** Grey, cables through cards 30%.
 
 | Setting | Key | Default | Choices | What it does |
 |---|---|---|---|---|
