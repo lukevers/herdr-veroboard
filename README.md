@@ -27,6 +27,18 @@ Needs Herdr with its Claude Code or Codex integration, Node 18+, and macOS.
    with Disconnect. For Codex it also switches hooks on in `~/.codex/config.toml`; the next time Codex starts, it asks
    you once to trust the new hooks.
 
+What Connect adds (Disconnect takes out only these):
+
+| Agent | File | Entry | What it does |
+|---|---|---|---|
+| Claude Code | `~/.claude/settings.json` | `statusLine` | Runs `tap.js`, which records the agent's facts for its card, then runs your own status line (kept after `--`). |
+| | | `subagentStatusLine` | Gives the card its sub-agent rows. If you have your own, it's kept and those rows don't show. |
+| | | `PreToolUse` hook (Bash) | The [launch guard](#launch-guard): a tab it opens for another agent lands in its own space, not the one you're viewing. |
+| | | `Stop`, `Notification` hooks | Ping the card: its glow, and the Blocked and Done clocks. |
+| Codex | `~/.codex/hooks.json` | `SessionStart`, `UserPromptSubmit`, `PostToolUse`, `PermissionRequest`, `Stop`, `Interrupt` hooks | Run `hook.js`, which records the agent's facts for its card. |
+| | | `PreToolUse` hook (Bash) | The [launch guard](#launch-guard), as for Claude Code. |
+| | `~/.codex/config.toml` | `hooks = true` under `[features]` | Codex runs hooks only with this on. Disconnect leaves it. |
+
 The board shows every agent without step 3, but only its lane, name and folder: the model, context, why it's blocked,
 its sub-agents and the rest come from the connected scripts.
 
@@ -173,6 +185,80 @@ Send a test (Try it) shows a test notification where you picked. The dialog clos
 | Mark as read | `noticeRead` | On visit | `open` (On open), `visit` (On visit), `hand` (By hand) | When a notification counts as read. On open: opening the bell's list marks all it shows. On visit: clicking it, or going to its agent's terminal any other way (its card, its tab, a key). By hand: clicking it, or its ✓ in the list. |
 
 In every mode, each row in the list has ✓ or ↺ (mark read or unread) and × (remove), and Mark all read works.
+
+### Blocked rules
+
+The People, Asks, Patterns and Rules tabs decide when a card goes to Blocked. They edit the `people` and `blocked`
+sections of `config.json`. Every list adds to the package's own (`defaults.json` in `mods/veroboard/agent/core`). Agents
+use a change on their next status-line run. The Test tab checks a message against the saved rules.
+
+**People**
+
+| Setting | Key | Default | What it does |
+|---|---|---|---|
+| People | `people.names` | Empty: any capitalized name counts | If you add names, only these count as people an agent waits on. Agents (`t22`) always count. |
+| Not people | `people.notPeople` | CI, Codex, Fable, Opus, Sonnet, Haiku, GitHub, Claude | Tools, bots and models. "Waiting on Sonnet" is background work, not a reason for Blocked. |
+
+**Asks**
+
+Phrases match whole words, in any case.
+
+| Setting | Key | Default | What it does |
+|---|---|---|---|
+| Asks | `blocked.asks` | Empty | Phrases near the end of a message that mean it waits for you (Blocked · You). |
+| Not asks | `blocked.notAsks` | Empty | A sentence with one of these is ignored when looking for an ask. |
+| Nothing for you | `blocked.nothingForYou` | Empty | Phrases near the end that say you have nothing to do: never Blocked · You. |
+| To-do labels | `blocked.todoLabels` | yours, for you, next for you, on you | Labels that start a line and hand you a to-do ("Still yours: add the key"). |
+
+**Patterns**
+
+JavaScript regular expressions, case-insensitive, for what plain phrases can't say.
+
+| Setting | Key | Default | What it does |
+|---|---|---|---|
+| Ask patterns | `blocked.patterns.asks` | Empty | A match near the end means an ask (Blocked · You). |
+| Not-ask patterns | `blocked.patterns.notAsks` | Empty | A sentence matching one of these is ignored. |
+
+**Rules**
+
+The built-in rules, each with a switch. Switching one off adds its ID to `blocked.disable` (default: empty).
+
+<details>
+<summary>All 29 built-in rules</summary>
+
+| ID | Group | What it looks for |
+|---|---|---|
+| `named-wait` | Waits on someone | Its Next line says it waits for someone |
+| `wait-line` | Waits on someone | A line of its own says it waits |
+| `next-nothing` | Not blocked | "Next: nothing" means not blocked |
+| `nothing-for-you` | Not blocked | It says you have nothing to do |
+| `elsewhere` | Ignored sentences | Ignores an ask answered in another agent's tab |
+| `outside-if` | Ignored sentences | Ignores an ask that hangs on an outside event |
+| `offer` | Ignored sentences | Ignores an optional offer |
+| `past-decision` | Ignored sentences | Ignores your earlier decision |
+| `question` | Asks you | It ends with a question |
+| `negated-ask` | Ignored sentences | Ignores a negated ask |
+| `tell-me` | Asks you | "tell me …" |
+| `let-me-know` | Asks you | "let me know which / whether / if …" |
+| `your-call` | Asks you | "your call / decision / approval …" |
+| `needs-you` | Asks you | "needs your …", "needs you to …" |
+| `waiting-on-you` | Asks you | "waiting on / for you" |
+| `on-hold-until` | Asks you | "on hold until you …" |
+| `once-you` | Asks you | "once you decide / confirm / approve …" |
+| `on-your-word` | Asks you | "on your go / word / ok" |
+| `say-quoted` | Asks you | say / reply / answer, then a quoted word |
+| `reply-with` | Asks you | "reply with …" |
+| `quoted-when-ready` | Asks you | "'go' when ready" |
+| `paste` | Asks you | "paste …" as an instruction |
+| `pending-your` | Asks you | "pending your …" |
+| `todo-label` | Asks you | A line-start to-do label for you |
+| `is-yours` | Asks you | "… is yours" |
+| `say-the-word` | Asks you | "say the word / go / yes / which" |
+| `do-and-ill` | Asks you | "approve … and I'll …" |
+| `pick-one` | Asks you | "pick one", "choose between", "which option" |
+| `send-wait` | Waits on someone | After hc send, it says it waits for the answer |
+
+</details>
 
 ## How it works
 
