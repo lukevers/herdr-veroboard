@@ -78,6 +78,8 @@ The items, in their default order:
 
 **Card layout**
 
+![A card with its background rows, glowing](docs/settings/card.gif)
+
 | Setting | Key | Default | Choices | What it does |
 |---|---|---|---|---|
 | Card layout | `card` | Every badge but Opened by, in the places listed below. | Drag badges between three lines (left and right side each) and Hidden. | What each card shows, and where. |
