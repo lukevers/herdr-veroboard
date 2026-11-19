@@ -47,9 +47,20 @@ Every setting below is in the gear's dialog, one table per tab. Each change save
 
 | Setting | Key | Default | Choices | What it does |
 |---|---|---|---|---|
-| Top bar | `top` | Left: gear, bell, filter, divider, spaces, new space. Right: count, pie. | Drag items between left, right and Hidden. + Divider adds more. | Which items show in the top bar, and where. The gear can't be hidden. |
+| Top bar | `top` | Every item shown, in the places listed below. | Drag items between left, right and Hidden. + Divider adds more. | Which items show in the top bar, and where. The gear can't be hidden. |
 
-Item IDs: `gear`, `bell`, `filter`, `divider` (added ones: `divider2`, `divider3`, …), `spaces`, `newSpace`, `count`, `pie`.
+The items, in their default order:
+
+| Item | ID | Default place | What it does |
+|---|---|---|---|
+| Settings | `gear` | Left, 1st | Opens the settings. It can be moved, but not hidden. |
+| Notifications | `bell` | Left, 2nd | Lists what Herdr notified you about, newest first. The pill counts the new ones. |
+| Filter box | `filter` | Left, 3rd | Filters the board by session name (⌘F). |
+| Divider | `divider` | Left, 4th | A short line that sets items apart. + Divider adds more (`divider2`, `divider3`, …). Drag an added one into Hidden to remove it. |
+| Spaces | `spaces` | Left, 5th | All Spaces, then a chip for each space. Click a chip to show only that space's agents. |
+| New space | `newSpace` | Left, 6th | The + button. It opens a new space. |
+| Agent count | `count` | Right, 1st | How many agents are on the board, or how many match the filter. |
+| Status pie | `pie` | Right, 2nd | How the agents split between Blocked, Waiting, Working and Done. |
 
 **Patch cables**
 
