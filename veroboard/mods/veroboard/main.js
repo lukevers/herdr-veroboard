@@ -858,9 +858,10 @@ export default class Board extends View {
           const fresh = mode === "open" ? unread : [];
           if (fresh.length) setShared("veroboard.noticeLog", all.map((n) => (fresh.includes(n.id) ? { ...n, seen: true, unread: false } : n)));
           // Exactly the popup's size: a 40px header, a 34px row of space chips (with more than one space), 4 to 7 rows
-          // of 62px (the edge between new and read lies over a row), a 1px border round it. The list keeps that height when you
+          // of 62px (+10 for the edge between new and read), a 1px border round it. The list keeps that height when you
           // pick another space; it scrolls. Keep in step with mods/veroboard-toast (ROW_H, LIST_MIN, LIST_MAX, EDGE_H).
-          const listH = Math.max(4 * 62, Math.min(7 * 62, shown.length * 62));
+          const edge = unread.length > 0 && unread.length < shown.length ? 10 : 0;
+          const listH = Math.max(4 * 62, Math.min(7 * 62, shown.length * 62 + edge));
           const bar = allSpaces.length > 1;
           const height = 40 + (bar ? 34 : 0) + listH + 2;
           const b = this.bellBounds;
