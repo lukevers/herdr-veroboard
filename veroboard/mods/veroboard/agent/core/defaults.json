@@ -38,9 +38,9 @@
     "disable": []
   },
   "board": {
-    "//": "How the board looks and behaves (Veroboard settings → Display). Theme colors come from your Herdr theme. Your config's \"board\" section overrides any of these.",
+    "//": "How the board looks and behaves (Veroboard settings → Board, Card and Notifications). Theme colors come from your Herdr theme. Your config's \"board\" section overrides any of these.",
     "cables": true,
-    "//cablesThroughCards": "How much the patch cables show through the cards, in % (0 to 50).",
+    "//cablesThroughCards": "How much the patch cables show through the cards, in % (0 to 30).",
     "cablesThroughCards": 5,
     "//cableColors": "The patch cables' colors: \"rainbow\" (the theme's colors) or \"grey\" (shades of grey).",
     "cableColors": "rainbow",

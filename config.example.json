@@ -24,8 +24,8 @@
     "disable": []
   },
   "board": {
-    "//": "How the board looks (Veroboard settings → Display). Leave a setting out to use the package default: cables true, cablesThroughCards 5, contextRamp [50, 85], stuckMinutes 15, glow true, greyWhenSeen true, doneTimer true, activeRing true.",
-    "//card": "What each card shows and where (Veroboard settings → Card). Easiest to set in the dialog. Shape: {\"lines\": [{\"left\": [], \"right\": []} ×3], \"hidden\": [], \"rows\": true}; badge ids: laneTime, why, launched, address, openedBy (hidden by default), folder, branch, model, effort, window, space, context.",
-    "//top": "The top bar (Veroboard settings → Board). Shape: {\"lines\": [{\"left\": [], \"right\": []}], \"hidden\": []}; item ids: spaces, newSpace, count, pie, divider, gear (can't be hidden), filter."
+    "//": "How the board looks (Veroboard settings → Board, Card and Notifications). Leave a setting out to use the package default. Every setting, its key and its default: the README's Configure section.",
+    "//card": "What each card shows and where (Veroboard settings → Card). Easiest to set in the dialog. Shape: {\"lines\": [{\"left\": [], \"right\": []} ×3], \"hidden\": [], \"rowKinds\": {\"task\": true, \"shell\": true, \"monitor\": true}}; badge ids: laneTime, why, launched, address, openedBy (hidden by default), folder, branch, model, effort, window, space, context.",
+    "//top": "The top bar (Veroboard settings → Board). Shape: {\"lines\": [{\"left\": [], \"right\": []}], \"hidden\": []}; item ids: gear (can't be hidden), bell, filter, divider (added ones: divider2, divider3, …), spaces, newSpace, count, pie."
   }
 }
