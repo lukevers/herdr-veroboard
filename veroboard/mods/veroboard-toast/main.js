@@ -22,14 +22,15 @@ const mix = (a, b, f) => {
   const [p, q] = [h(a), h(b)];
   return p && q ? "#" + p.map((v, i) => Math.round(v + (q[i] - v) * f).toString(16).padStart(2, "0")).join("") : a;
 };
-// The edge between new and read notifications: a sawtooth, like a torn receipt, filled with the read part's darker color.
-// It lies over the bottom of the last new row (mt(-h)) and starts after the 3px stripe, so the stripes above and below it
-// meet with the same 1px line as between any two rows (user, 2026-11-19: a 10px gap in the stripes looked broken).
+// The edge between new and read notifications: a sawtooth, like a torn receipt. The new part's lighter color hangs its
+// teeth down over the top of the first read row, from 1px up (over the last new row's line), and starts after the 3px
+// stripe, so the stripes above and below it meet with the same 1px line as between any two rows (user, 2026-11-19: a
+// 10px gap in the stripes looked broken; then: the read row gives up the room, not the new one).
 const sawtooth = (color, w = 377, h = EDGE_H, tooth = 16) => {
-  const pts = [[0, h], [0, h / 2]];
-  for (let x = 0; x < w; x += tooth) pts.push([x + tooth / 2, 0], [Math.min(w, x + tooth), h / 2]);
-  pts.push([w, h]);
-  return div().relative().ml(3).mt(-h).w(w).h(h).flex_none()
+  const H = h + 1, pts = [[0, 0], [0, H / 2]];
+  for (let x = 0; x < w; x += tooth) pts.push([x + tooth / 2, H], [Math.min(w, x + tooth), H / 2]);
+  pts.push([w, 0]);
+  return div().absolute().top(-1).left(3).w(w).h(H)
     .child(globalThis.window.paint_path(PathBuilder.fill().add_polygon(pts, true).build(), color).absolute().top(0).left(0).size_full());
 };
 // A card-style badge (as card.js badge()): 16px, the theme's raised color unless given, an optional 10px icon, mono for ids.
@@ -216,9 +217,9 @@ export default class VeroboardToast extends View {
         // The height the bell sized the popup for; it stays when you pick another space (the list scrolls).
         ? v_flex().id("log-list").h(Number(p.listH) || Math.max(LIST_MIN, Math.min(LIST_MAX, log.length * ROW_H))).overflow_y_scrollbar()
           .children(fresh.map(row))
-          .when(fresh.length > 0 && read.length > 0, (el) => el.child(sawtooth(dark)))
-          // The read part runs to the bottom, so a short list doesn't end in a lighter strip.
-          .when(read.length > 0, (el) => el.child(v_flex().flex_grow(1).flex_shrink_0().bg(dark).children(read.map(row))))
+          // The read part runs to the bottom, so a short list doesn't end in a lighter strip. The edge is drawn last, over it.
+          .when(read.length > 0, (el) => el.child(v_flex().relative().flex_grow(1).flex_shrink_0().bg(dark).children(read.map(row))
+            .when(fresh.length > 0, (el) => el.child(sawtooth(bodyBg(t))))))
         : div().h(Number(p.listH) || LIST_MIN).p(18).text_size(12).text_color(t.muted)
           .child(sp && whole.length ? `Nothing in ${sp.name} yet. Pick All for the other spaces.`
             : "Nothing yet. What Herdr tells you lands here, newest first: an agent needs you or finished, a command failed."));
