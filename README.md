@@ -190,7 +190,7 @@ In every mode, each row in the list has ✓ or ↺ (mark read or unread) and × 
 
 The People, Asks, Patterns and Rules tabs decide when a card goes to Blocked. They edit the `people` and `blocked`
 sections of `config.json`. Every list adds to the package's own (`defaults.json` in `mods/veroboard/agent/core`). Agents
-use a change on their next status-line run. The Test tab checks a message against the saved rules.
+use a change on their next status-line run.
 
 **People**
 
@@ -255,6 +255,12 @@ The built-in rules, each with a switch. Switching one off adds its ID to `blocke
 | `pick-one` | Asks you | "pick one", "choose between", "which option" |
 | `send-wait` | Waits on someone | After hc send, it says it waits for the answer |
 
+
+**Test**
+
+![Three messages tested: Done, Blocked · You, Blocked · t22](docs/settings/test.gif)
+
+Paste an agent's last message to see which lane its card would go to, by your saved rules. **See rule** opens the rule that matched.
 
 ## How it works
 
