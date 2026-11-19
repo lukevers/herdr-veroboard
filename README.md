@@ -49,6 +49,13 @@ Item IDs: `gear`, `bell`, `filter`, `divider` (added ones: `divider2`, `divider3
 
 **Patch cables**
 
+<p>
+  <img src="docs/settings/cables-rainbow.png" alt="Patch cables in rainbow colors" width="49%">
+  <img src="docs/settings/cables-grey.png" alt="Patch cables in grey" width="49%">
+</p>
+
+> Left: Rainbow, cables through cards 5% (the default). Right: Grey, cables through cards 30%.
+
 | Setting | Key | Default | Choices | What it does |
 |---|---|---|---|---|
 | Show patch cables | `cables` | On | On, Off | Draws a line from each agent to the agents it opened. |
