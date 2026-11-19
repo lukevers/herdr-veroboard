@@ -80,6 +80,11 @@ The items, in their default order:
 
 ![A card with its background rows, glowing](docs/settings/card.gif)
 
+> The pink pulse is the **glow**: a card pulses when its agent finishes or asks you something. On the board it pulses once. Turn it off with **Glow on finish or ask**, under Look.<br>
+> **Sub-agent** (Explore): an agent this one runs inside its own session. The row shows its type, its task and how long it has run.<br>
+> **Background shell** (npm run dev): a command it left running, such as a dev server. The row shows how long it has run.<br>
+> **Monitor** (Watch CI): something it watches until it ends. The row shows the latest event ("build passed"). 9m / 30m means it has watched for 9 minutes, out of 30.
+
 | Setting | Key | Default | Choices | What it does |
 |---|---|---|---|---|
 | Card layout | `card` | Every badge but Opened by, in the places listed below. | Drag badges between three lines (left and right side each) and Hidden. | What each card shows, and where. |
