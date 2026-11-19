@@ -511,7 +511,7 @@ export default class Board extends View {
     if (a.status === "working") return null;
     const t = theme();
     const mark = (shared("veroboard.blocked") ?? {})[a.address];
-    if (mark) return { icon: "mods/workspace-chrome/pin.svg", label: "Pinned", color: t.blocked, at: mark.at,
+    if (mark) return { icon: "mods/veroboard/icons/pin.svg", label: "Pinned", color: t.blocked, at: mark.at,
       tip: "You pinned it to Blocked. Right-click the card to unpin it." };
     if (this.dismissed(a)) return null;
     if (a.status === "blocked") {
@@ -526,9 +526,9 @@ export default class Board extends View {
     // The hover names the rule that decided it (facts.js awaiting.rule), so a wrong lane can be fixed in Veroboard settings (the gear).
     const rule = typeof w.rule === "string" ? ` Rule: ${w.rule}${this.ruleWhy?.[w.rule] ? `: ${this.ruleWhy[w.rule]}` : ""}.` : "";
     return w.to === "you"
-      ? { icon: "mods/workspace-chrome/clock.svg", label: "You", color: t.blocked, at: w.at,
+      ? { icon: "mods/veroboard/icons/clock.svg", label: "You", color: t.blocked, at: w.at,
           tip: `Its last message asks you something.${rule} Wrong? Tune it in Veroboard settings (the gear in the header).` }
-      : { icon: "mods/workspace-chrome/clock.svg", label: w.to, color: ELSEWHERE, at: w.at,
+      : { icon: "mods/veroboard/icons/clock.svg", label: w.to, color: ELSEWHERE, at: w.at,
           tip: `It says it waits on ${w.to}.${rule} Wrong? Tune it in Veroboard settings (the gear in the header).` };
   }
   awaiting(a) {
@@ -634,8 +634,8 @@ export default class Board extends View {
           .when(Boolean(g.space), (el) => el.child(pill(g.space, t.muted)))
           // As on the card: a branch in a linked worktree is blue with the layers icon.
           .when(Boolean(g.branch), (el) => el.child(g.branch.worktree
-            ? pill(g.branch.name, t.ansi4, alpha(t.ansi4, "26"), false, "mods/workspace-chrome/layers.svg", true)
-            : pill(g.branch.name, t.muted, t.raised, false, "mods/workspace-chrome/git-branch.svg", true)))
+            ? pill(g.branch.name, t.ansi4, alpha(t.ansi4, "26"), false, "mods/veroboard/icons/layers.svg", true)
+            : pill(g.branch.name, t.muted, t.raised, false, "mods/veroboard/icons/git-branch.svg", true)))
           // Who opened it on the right, under the id (user, 2026-11-19); the branch gives way first.
           .when(Boolean(g.parent), (el) => el.child(div().flex_1().min_w(0))
             .child(pill(`${g.parent.name || g.parent.address} · ${g.parent.address}`, t.muted, t.raised, false, "mods/veroboard/launched-by.svg"))));
@@ -888,7 +888,7 @@ export default class Board extends View {
             .children(active.tabs.map((c, i) => h_flex().id(`ws-tab-${c.id}`).flex_none().h(22).px(8).gap(5).items_center().rounded(5).text_size(11).cursor_pointer()
               .when(c.active, el => el.bg(alpha(t.accent, "26")).border(1).border_color(alpha(t.accent, "55")).text_color(t.foreground))
               .when(!c.active, el => el.bg(t.raised).border(1).border_color(t.raised).text_color(t.muted).hover(s => s.bg(t.hover)))
-              .when(c.status === "working", el => el.child(svg("mods/workspace-chrome/spinner.svg").size(10).text_color(t.working).spin(900)))
+              .when(c.status === "working", el => el.child(svg("mods/veroboard/icons/spinner.svg").size(10).text_color(t.working).spin(900)))
               .when(c.status === "blocked" || c.status === "done", el => el.child(dot(t[c.status], 6)))
               .when(tabAddress(c.id) !== "", el => el.child(div().flex_none().text_color(t.dim).child(`${tabAddress(c.id)}:`)))
               .child(div().max_w(180).truncate().child(c.name))

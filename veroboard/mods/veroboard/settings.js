@@ -29,7 +29,7 @@ const alpha = (hex, aa) => (/^#[0-9a-fA-F]{6}$/.test(hex) ? hex + aa : hex);
 const heading = (t, text) => div().text_size(10.5).font_semibold().text_color(t.dim).child(text.toUpperCase());
 // The Blocked reason badge exactly as a card draws it (card.js "why"), for the examples in this dialog.
 const whyBadge = (t, label, color) => badge(t).bg(alpha(color, "26")).text_color(color)
-  .child(svg("mods/workspace-chrome/clock.svg").size(10).flex_none()).child(label);
+  .child(svg("mods/veroboard/icons/clock.svg").size(10).flex_none()).child(label);
 const code = (t, text) => div().flex_none().px(5).rounded(4).bg(t.background).border(1).border_color(t.border).font_family(MONO).text_size(11).child(text);
 // The same space above a section's line as under it, 18px (user, 2026-11-18: 28 above read as too much). `above`:
 // what the section before already leaves under itself (a setting row ends with 10px of padding), taken off the 18.
@@ -497,7 +497,7 @@ export class SettingsPanel {
     return {
       address: "t42", program, name: "fix-login-flow", color: t.blocked, shown: false, flash: null,
       laneTime: { text: "12m", color: t.working },
-      why: { icon: "mods/workspace-chrome/clock.svg", label: "You 4m", color: t.blocked },
+      why: { icon: "mods/veroboard/icons/clock.svg", label: "You 4m", color: t.blocked },
       launched: 3, openedBy: "t22", openedByName: "release-plan", folder: "myapp", branch: { name: "feature/login-fix", worktree: true, state: null },
       model: "Opus 5.5", programName: "Claude", effort: "high", window: 1000000, space: "Work", context: { pct: 62 },
       rows: [

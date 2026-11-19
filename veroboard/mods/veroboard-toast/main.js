@@ -187,8 +187,8 @@ export default class VeroboardToast extends View {
             .when(Boolean(n.agent.space) && !sp, (el) => el.child(pill(t, n.agent.space, t.muted)))
             // As on the card: a branch in a linked worktree is blue with the layers icon.
             .when(Boolean(n.agent.branch), (el) => el.child(n.agent.branch.worktree
-              ? pill(t, n.agent.branch.name, t.ansi4, alpha(t.ansi4, "26"), false, "mods/workspace-chrome/layers.svg", true)
-              : pill(t, n.agent.branch.name, t.muted, t.raised, false, "mods/workspace-chrome/git-branch.svg", true)))
+              ? pill(t, n.agent.branch.name, t.ansi4, alpha(t.ansi4, "26"), false, "mods/veroboard/icons/layers.svg", true)
+              : pill(t, n.agent.branch.name, t.muted, t.raised, false, "mods/veroboard/icons/git-branch.svg", true)))
             // Who opened it on the right, under the id (user, 2026-11-19: both lines end in an agent's id); the branch
             // gives way first.
             .when(Boolean(n.agent.parent), (el) => el.child(div().flex_1().min_w(0))

@@ -13,10 +13,10 @@ If they don't work on your Herdr, or you want it different, build it again from 
 
 Top to bottom:
 
-1. **Header, 52px** (chrome color). Left: a gear button, a 100px filter box ("Filter", ⌘F hint), a 1px divider, then
-   space chips: "All Spaces ⌘1" and one per space (⌘2–⌘9), and a "+" for a new space. Right: a slim pill "14 agents", a
-   small pie of agent statuses, a second divider and a bell (a pill counts new notifications). The order of these items
-   is configurable.
+1. **Header, 52px** (chrome color). Left: a gear button, a bell (a pill counts new notifications), a 100px filter box
+   ("Filter", ⌘F hint), a 1px divider, then space chips: "All Spaces ⌘1" and one per space (⌘2–⌘9), and a "+" for a
+   new space. Right: a slim pill "14 agents" and a small pie of agent statuses. The order of these items is
+   configurable, and more dividers can be added.
 2. **Board, 355px** (canvas color, resizable; a grip below it). Four equal lanes, 24px side padding, 1px divider lines
    (halfway between canvas and border). Each lane has a 27px header: a status dot that breathes while the lane has live
    agents, the label (13px, semibold) and a count pill. Lane colors come from the theme: Blocked `blocked`, Working
@@ -26,9 +26,12 @@ Top to bottom:
    - Line 2: folder; right: git branch (blue in a worktree).
    - Line 3: model, effort, context window; right: space, and a context bar of ten 10% segments (plain below 50%, peach
      to red from 50% to 85%).
-   - Under a card, one 22px row per sub-agent, background shell or monitor, with its age (pink when it looks stuck).
-4. **Patch cables**: a curved line from an agent's card to each agent it opened, with jack plugs at both ends, one color
-   per family. A cable to a card in the same lane loops out and back. Cables pass behind cards, 5% visible through them.
+   - Under a card, one 22px row per sub-agent, background shell or monitor, with its age. Each kind can be hidden, and
+     each has its own "looks stuck" time (15, 15 and 30 minutes) after which its age turns pink.
+4. **Patch cables**: a curved line from an agent's card to each agent it opened, with jack plugs at both ends. Siblings
+   step through the theme's colors, and each generation starts one color further along; a cable from a top-level agent
+   is solid, from its child dashed, from deeper dotted. Grey shades instead of colors is a setting. A cable to a card in
+   the same lane loops out and back. Cables pass behind cards, 5% visible through them (a setting, 0–30%).
 5. **Tab strip, 34px**: the active space's name, its tabs as pills (status spinner or dot, terminal id, name, ⌘ hint),
    and "+ ⌘T".
 6. **Terminals**: the active tab's panes, 12px apart, 7px radius, 1px border, each with a 28px header (program icon,
@@ -47,11 +50,16 @@ Top to bottom:
 - **Wheel** over a lane scrolls it; cables follow. Double-click the grip: reset the board's height.
 - **Keys** (keys.json section `layout:veroboard`): ⌘F focuses the filter (every word must match something on a card;
   Esc clears), ⌘1 shows all spaces, ⌘2–⌘9 pick a space.
-- **The gear** opens a settings dialog: drag the top bar's items and the card's badges into place or into Hidden;
-  switches and sliders for cables, glow, the context color ramp and more; where notifications pop up (Notifications
-  tab: over the board or the terminal, `board.toastArea`, then a 3 × 3 picker, `board.toastPlace`, top-right of the
-  board by default, and a button that sends a test); lists that tune the Blocked rules, with
-  examples; every built-in rule with an on/off switch; and a box to test a message.
+- **The gear** opens the settings dialog (852px wide), with tabs: **Board** (drag the top bar's items into place or into
+  Hidden, over an example bar showing All Spaces and the first space; the patch cable settings over an example drawn
+  by the board's own code at real size: two lanes, a parent and the two agents it opened), **Card** (drag the card's
+  badges, over an example card; the Look switches, each with a Show button that plays its effect on the example; the
+  context color ramp; the background row switches and stuck times; what keeps a card in Waiting), **Notifications**
+  (over the board or the terminal, `board.toastArea`; a 3 × 3 picker, `board.toastPlace`, top-right by default; a
+  button that sends a test; when one counts as read), **Agents** (below), **People**, **Asks**, **Rules** and
+  **Patterns** (the Blocked rules: lists with examples, and every built-in rule with an on/off switch) and **Test** (a
+  box that runs a message through the saved rules). Every setting that differs from its default has a Reset, in a
+  slot that's always kept so nothing moves when it shows. A GitHub button links the repo.
 - Tabs are named after what's in them (Claude Code's title, the running program, or the folder) until you rename one.
 
 ## Built from
@@ -68,15 +76,21 @@ Top to bottom:
   most 3; a click runs its action, × dismisses, it times out) and `veroboard.noticeLog` (the last 50), then closes
   Herdr's toast. A notification about an agent (Herdr's carry `agent.focus {terminal}`) gets that agent's card facts
   saved on it by the board within a second (name, why it's in its lane, id, space, branch, who opened it) and shows as a
-  slim card: a colored left edge in the why's color (rounded with the toast's corners), name, why, id; then space,
-  branch, parent. Opened from the bell with `props.view: "history"`, it lists the log newest first (at least four rows
-  tall, each with its age): unread ones on the popup's color, then a sawtooth edge and the read ones darker and dimmed.
+  slim card: a colored left edge in the why's color (rounded with the toast's corners), name, why, id; then space and
+  branch on the left and the parent on the right, under the id (the branch is cut first when the line runs out).
+  Opened from the bell with `props.view: "history"`, it lists the log newest first, in 62px rows (4 to 7 tall, then it
+  scrolls; the bell sizes the popup to match), each with its age: unread ones on the popup's color, then a 10px
+  sawtooth band and the read ones darker and dimmed. In the band's 3px stripe column, the stripe above runs halfway
+  down and the one below halfway up, so the stripes don't break there.
   When one counts as read is `board.noticeRead`: `"open"` (opening the list), `"visit"` (the default: clicking it, or
   being on its agent's terminal) or `"hand"` (clicking it, or its ✓). In every mode each row has ✓ or
   ↺ (mark unread) and, under it, × (remove that one), the header has Mark all read, and dismissing a toast counts as read. The bell and the list follow the board's space: one
   space selected shows that space's notifications (plus Herdr's own, which belong to no space); All Spaces shows all.
   Chips under the list's header pick another space.
-- **Shipped mods used:** `menu` (tab right-click), `new-menu` (the + button). Icons from `workspace-chrome` and `icons/`.
+- **Shipped mods used:** `menu` (tab right-click), `new-menu` (the + button). Program icons from Herdr's `icons/`.
+- **Icons:** Lucide, in `mods/veroboard/icons/` (copies of Herdr's `workspace-chrome` ones, so a Herdr update can't blank
+  them) and a few of the board's own; their license is `mods/veroboard/LICENSE-Lucide.txt`. `veroboard-menu` uses them
+  by path. No font to install: IDs are in JetBrains Mono and the UI in Geist, both shipped with Herdr.
 - **Herdr:** `agents`, `spaces`, `panes`, `terminals`, `shared`/`setShared` (keys `veroboard.*`), `keys`, `nextCommand`,
   `openOverlay`, `setAgentOrder`, `readTextFile`, `writeTextFile`, `watchFolder`, `exec`; commands `agent.focus`,
   `tab.select`, `tab.rename`, `space.new`, `space.select`, `layout.resize`, `mod.open`.

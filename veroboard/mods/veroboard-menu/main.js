@@ -78,7 +78,7 @@ export default class BoardMenu extends View {
         .when(i === this.at, el => el.bg(alpha(t.accent, "26")))
         .hover(s => s.bg(alpha(t.accent, "1a")))
         .on_click(() => this.choose(i))
-        .child(svg(`mods/workspace-chrome/${it[1]}.svg`).size(14).flex_none().text_color(t.muted))
+        .child(svg(`mods/veroboard/icons/${it[1]}.svg`).size(14).flex_none().text_color(t.muted))
         .child(div().flex_1().child(it[0]))));
   }
 }

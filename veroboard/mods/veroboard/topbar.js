@@ -76,7 +76,7 @@ const newSpaceButton = (t) => h_flex().id("chip-new-space").size(27).flex_none()
 const gearButton = (t) => h_flex().id("board-settings").size(27).flex_none().items_center().justify_center().rounded(6).cursor_pointer()
   .bg(t.surface).border(1).border_color(t.border).text_color(t.muted).tooltip("Veroboard settings")
   .hover((s) => s.bg(t.hover).text_color(t.foreground))
-  .child(svg("mods/workspace-chrome/settings.svg").size(13));
+  .child(svg("mods/veroboard/icons/settings.svg").size(13));
 // A short divider in the lane dividers' color (user, 2026-11-16).
 const dividerLine = (t) => div().w(1).h(17).flex_none().mx(4).bg(mix(t.canvas, t.border, 0.5));
 

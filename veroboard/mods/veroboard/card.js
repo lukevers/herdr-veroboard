@@ -276,12 +276,12 @@ const renderCard = (m, t, o = {}) => {
       .when(!o.pick && Boolean(m.openedByName), (el) => el.id(`by-${m.address}`).tooltip(`Opened by ${m.openedBy} (${m.openedByName})`))
       .child(svg("mods/veroboard/launched-by.svg").size(10).flex_none()).child(m.openedBy),
     folder: () => m.folder && badge(t).flex_shrink(1).min_w(0)
-      .child(svg("mods/workspace-chrome/folder.svg").size(10).flex_none())
+      .child(svg("mods/veroboard/icons/folder.svg").size(10).flex_none())
       .child(div().min_w(0).truncate().child(m.folder)),
     // In a linked worktree the branch pill turns blue with a layers icon; the main checkout keeps the grey branch pill.
     branch: () => m.branch && badge(t).flex_shrink(1).min_w(0)
       .when(Boolean(m.branch.worktree), (el) => el.bg(alpha(t.ansi4, "26")).text_color(t.ansi4))
-      .child(svg(m.branch.worktree ? "mods/workspace-chrome/layers.svg" : "mods/workspace-chrome/git-branch.svg").size(10).flex_none())
+      .child(svg(m.branch.worktree ? "mods/veroboard/icons/layers.svg" : "mods/veroboard/icons/git-branch.svg").size(10).flex_none())
       .child(div().min_w(0).max_w(220).truncate().child(m.branch.name))
       .when(Boolean(m.branch.state), (el) => el.child(div().flex_none().text_color(t.blocked).font_semibold().child(m.branch.state))),
     model: () => (m.model ? modelBadge(t, m.model) : badge(t).child(m.programName ?? "")),
@@ -367,7 +367,7 @@ const renderCard = (m, t, o = {}) => {
   const row = (r, i) => {
     // A sub-agent: a spinner, its type and label, how long it has run (Claude Code's startTime), to spot one that's stuck.
     if (r.kind === "task") return rowFrame(r, i, t.surface)
-      .child(svg("mods/workspace-chrome/spinner.svg").size(9).text_color(t.accent).spin(900).flex_none())
+      .child(svg("mods/veroboard/icons/spinner.svg").size(9).text_color(t.accent).spin(900).flex_none())
       .when(Boolean(r.type), (el) => el.child(div().flex_none().text_size(10.5).font_semibold().text_color(t.accent).child(r.type)))
       .child(div().flex_1().min_w(0).truncate().text_size(10.5).text_color(t.foreground).child(r.text))
       .when(Number.isFinite(r.startTime), (el) => el.child(age(r.startTime, r.startTime)));
