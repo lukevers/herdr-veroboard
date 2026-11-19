@@ -636,7 +636,9 @@ export default class Board extends View {
           .when(Boolean(g.branch), (el) => el.child(g.branch.worktree
             ? pill(g.branch.name, t.ansi4, alpha(t.ansi4, "26"), false, "mods/workspace-chrome/layers.svg", true)
             : pill(g.branch.name, t.muted, t.raised, false, "mods/workspace-chrome/git-branch.svg", true)))
-          .when(Boolean(g.parent), (el) => el.child(pill(`${g.parent.name || g.parent.address} · ${g.parent.address}`, t.muted, t.raised, false, "mods/veroboard/launched-by.svg"))));
+          // Who opened it on the right, under the id (user, 2026-11-19); the branch gives way first.
+          .when(Boolean(g.parent), (el) => el.child(div().flex_1().min_w(0))
+            .child(pill(`${g.parent.name || g.parent.address} · ${g.parent.address}`, t.muted, t.raised, false, "mods/veroboard/launched-by.svg"))));
     };
     // The colored left edge follows the notice's rounded corners, like a CSS border-left on a rounded box (a square
     // stripe looked odd on a toast; user, 2026-11-18): the box is filled with the why's color, and the content sits 3px
@@ -856,10 +858,9 @@ export default class Board extends View {
           const fresh = mode === "open" ? unread : [];
           if (fresh.length) setShared("veroboard.noticeLog", all.map((n) => (fresh.includes(n.id) ? { ...n, seen: true, unread: false } : n)));
           // Exactly the popup's size: a 40px header, a 34px row of space chips (with more than one space), 4 to 7 rows
-          // of 62px (+10 for the edge between new and read), a 1px border round it. The list keeps that height when you
+          // of 62px (the edge between new and read lies over a row), a 1px border round it. The list keeps that height when you
           // pick another space; it scrolls. Keep in step with mods/veroboard-toast (ROW_H, LIST_MIN, LIST_MAX, EDGE_H).
-          const edge = unread.length > 0 && unread.length < shown.length ? 10 : 0;
-          const listH = Math.max(4 * 62, Math.min(7 * 62, shown.length * 62 + edge));
+          const listH = Math.max(4 * 62, Math.min(7 * 62, shown.length * 62));
           const bar = allSpaces.length > 1;
           const height = 40 + (bar ? 34 : 0) + listH + 2;
           const b = this.bellBounds;

@@ -23,11 +23,13 @@ const mix = (a, b, f) => {
   return p && q ? "#" + p.map((v, i) => Math.round(v + (q[i] - v) * f).toString(16).padStart(2, "0")).join("") : a;
 };
 // The edge between new and read notifications: a sawtooth, like a torn receipt, filled with the read part's darker color.
-const sawtooth = (color, w = 380, h = EDGE_H, tooth = 16) => {
+// It lies over the bottom of the last new row (mt(-h)) and starts after the 3px stripe, so the stripes above and below it
+// meet with the same 1px line as between any two rows (user, 2026-11-19: a 10px gap in the stripes looked broken).
+const sawtooth = (color, w = 377, h = EDGE_H, tooth = 16) => {
   const pts = [[0, h], [0, h / 2]];
   for (let x = 0; x < w; x += tooth) pts.push([x + tooth / 2, 0], [Math.min(w, x + tooth), h / 2]);
   pts.push([w, h]);
-  return div().relative().w_full().h(h).flex_none()
+  return div().relative().ml(3).mt(-h).w(w).h(h).flex_none()
     .child(globalThis.window.paint_path(PathBuilder.fill().add_polygon(pts, true).build(), color).absolute().top(0).left(0).size_full());
 };
 // A card-style badge (as card.js badge()): 16px, the theme's raised color unless given, an optional 10px icon, mono for ids.
@@ -145,7 +147,7 @@ export default class VeroboardToast extends View {
         .child(btn(`log-rm-${n.id}`, "×", "Remove", () => remove(n.id)));
     };
     const row = (n) => h_flex().id(`log-${n.id}`).relative().h(ROW_H).flex_none().pl(14).pr(8).gap(11).items_center()
-      .when(!(n === fresh[fresh.length - 1] && read.length > 0), (el) => el.border_b(1).border_color(t.border))
+      .border_b(1).border_color(t.border)
       .when(isRead(n), (el) => el.opacity(this.hover === n.id ? 0.8 : 0.45))
       .on_hover((on, cx) => { if (on) this.hover = n.id; else if (this.hover === n.id) this.hover = null; cx.notify(); })
       // Clicking one reads it (and goes to its agent, closing the list).
@@ -181,7 +183,10 @@ export default class VeroboardToast extends View {
             .when(Boolean(n.agent.branch), (el) => el.child(n.agent.branch.worktree
               ? pill(t, n.agent.branch.name, t.ansi4, alpha(t.ansi4, "26"), false, "mods/workspace-chrome/layers.svg", true)
               : pill(t, n.agent.branch.name, t.muted, t.raised, false, "mods/workspace-chrome/git-branch.svg", true)))
-            .when(Boolean(n.agent.parent), (el) => el.child(pill(t, `${n.agent.parent.name || n.agent.parent.address} · ${n.agent.parent.address}`, t.muted, t.raised, false, "mods/veroboard/launched-by.svg")))))
+            // Who opened it on the right, under the id (user, 2026-11-19: both lines end in an agent's id); the branch
+            // gives way first.
+            .when(Boolean(n.agent.parent), (el) => el.child(div().flex_1().min_w(0))
+              .child(pill(t, `${n.agent.parent.name || n.agent.parent.address} · ${n.agent.parent.address}`, t.muted, t.raised, false, "mods/veroboard/launched-by.svg")))))
         .child(toggle(n)));
     // A popup is as big as its content, so the list gets a real height (see ROW_H).
     // The header (the title and the space chips) on a light accent tint, like the top bar's selected space, with an
@@ -209,7 +214,7 @@ export default class VeroboardToast extends View {
         // New on top on the popup's own color; then a sawtooth edge and the read ones on a darker color, dimmed (user,
         // 2026-11-18). All read: the whole list is the darker part; none read: no edge.
         // The height the bell sized the popup for; it stays when you pick another space (the list scrolls).
-        ? v_flex().id("log-list").h(Number(p.listH) || Math.max(LIST_MIN, Math.min(LIST_MAX, log.length * ROW_H + (fresh.length && read.length ? EDGE_H : 0)))).overflow_y_scrollbar()
+        ? v_flex().id("log-list").h(Number(p.listH) || Math.max(LIST_MIN, Math.min(LIST_MAX, log.length * ROW_H))).overflow_y_scrollbar()
           .children(fresh.map(row))
           .when(fresh.length > 0 && read.length > 0, (el) => el.child(sawtooth(dark)))
           // The read part runs to the bottom, so a short list doesn't end in a lighter strip.
