@@ -9,7 +9,7 @@ A Kanban board for your Claude Code and Codex agents, as a [Herdr](https://herdr
 - **Blocked says why:** a question for you, an open dialog, or who it's waiting on.
 - **⌘F** filters by anything on a card. **⌘1–⌘9** pick a space.
 - **Right-click** a card to pin it to Blocked or move it to Done.
-- **Notifications in the board's corner**, not over your terminal, and a **bell** with the history, newest first.
+- **Notifications** where you place them, over the board or the terminal, and a **bell** with the history, newest first.
 - **Child agents stay in their parent's space:** an agent's new tab opens next to it, not in the space you're viewing.
 - **The gear** opens settings: arrange the card and top bar, tune the Blocked rules, test a message.
 
@@ -22,12 +22,10 @@ Needs Herdr with its Claude Code or Codex integration, Node 18+, and macOS.
    run `./install.sh`, which does the same; it never overwrites your files or key bindings (`--force` moves yours aside).
 2. **Switch to it** with `ctrl-shift-l`.
 3. **Connect your agents.** Open the gear (top left of the board) → **Agents** → **Connect**, for Claude Code and/or
-   Codex. It shows the lines it will add to `~/.claude/settings.json` or `~/.codex/hooks.json` before it adds them,
-   keeps your own status line (it runs after the board's), saves a copy of each file first, and takes them out again
-   with Disconnect. For Codex it also switches hooks on in `~/.codex/config.toml`; the next time Codex starts, it asks
-   you once to trust the new hooks.
+   Codex. It shows what it will change before it does, and saves a copy of each file first. The next time Codex
+   starts, it asks you once to trust the new hooks.
 
-What Connect adds (Disconnect takes out only these):
+What Connect adds. **Disconnect** takes out these and nothing else:
 
 | Agent | File | Entry | What it does |
 |---|---|---|---|
@@ -44,10 +42,9 @@ its sub-agents and the rest come from the connected scripts.
 
 ## Configure
 
-Use the gear. Changes save to `~/.config/veroboard/config.json`; see `config.example.json` for the format.
-
-Every setting below is in the gear's dialog, one table per tab. Each change saves at once to the `"board"` section of
-`config.json`. A setting you leave out uses its default. Reset (beside a changed setting) puts it back.
+Every setting below is in the gear's dialog, one section per tab. Each change saves at once to
+`~/.config/veroboard/config.json` (the format: `config.example.json`). The Board, Card and Notifications settings go in
+its `"board"` section. A setting you leave out uses its default. Reset (beside a changed setting) puts it back.
 
 ### Board
 
