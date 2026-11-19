@@ -149,6 +149,25 @@ What keeps a card in Waiting after its turn ends. Off: the card goes to Done ins
 | Monitors | `waitMonitor` | On | On, Off | While a monitor it watches runs (CI, a deploy). |
 | Helper terminals | `waitHelper` | On | On, Off | While a terminal it opened with `hc` is open. |
 
+### Notifications
+
+**Pop-up notifications**
+
+Send a test (Try it) shows a test notification where you picked. The dialog closes so you can see it.
+
+| Setting | Key | Default | Choices | What it does |
+|---|---|---|---|---|
+| Area | `toastArea` | Board | `board`, `terminal` | Where notifications pop up: over the board at the top, or over the terminal at the bottom. |
+| Placement | `toastPlace` | Top right | `top-left`, `top-center`, `top-right`, `middle-left`, `middle-center`, `middle-right`, `bottom-left`, `bottom-center`, `bottom-right` | The spot inside that area. The newest notification sits nearest the edge. The bell's list still opens under the bell. |
+
+**Read and unread**
+
+| Setting | Key | Default | Choices | What it does |
+|---|---|---|---|---|
+| Mark as read | `noticeRead` | On visit | `open` (On open), `visit` (On visit), `hand` (By hand) | When a notification counts as read. On open: opening the bell's list marks all it shows. On visit: clicking it, or going to its agent's terminal any other way (its card, its tab, a key). By hand: clicking it, or its ✓ in the list. |
+
+In every mode, each row in the list has ✓ or ↺ (mark read or unread) and × (remove), and Mark all read works.
+
 ## How it works
 
 `tap.js` wraps your status line. Each run, it records the agent's context, model, git state, background work and
