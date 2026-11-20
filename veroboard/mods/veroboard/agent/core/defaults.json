@@ -58,6 +58,16 @@
     "waitShell": true,
     "waitMonitor": true,
     "waitHelper": true,
+    "//decisionBlocks": "A decision an agent queued that waits on your answer keeps it in Blocked (reason: Decision), not Done. Working and Waiting stay put. Veroboard settings → Decisions.",
+    "decisionBlocks": true,
+    "//decisionToast": "A notification when an agent asks a new decision, replies, or changes its proposal.",
+    "decisionToast": true,
+    "//decisionSound": "Herdr's blocked sound for the same events.",
+    "decisionSound": false,
+    "//decisionOrder": "The Decisions dialog's tabs: \"oldest\" or \"newest\" first (those waiting on you always lead).",
+    "decisionOrder": "oldest",
+    "//decisionDiffOpen": "Show a proposal's changes to the current text open (false: folded behind ▾).",
+    "decisionDiffOpen": true,
     "glow": true,
     "greyWhenSeen": true,
     "doneTimer": true,
@@ -77,7 +87,8 @@
             "laneTime",
             "why",
             "launched",
-            "address"
+            "address",
+            "decisions"
           ]
         },
         {
@@ -112,6 +123,7 @@
           "left": [
             "gear",
             "bell",
+            "decisions",
             "filter",
             "divider",
             "spaces",

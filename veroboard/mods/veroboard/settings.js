@@ -19,7 +19,7 @@ import { theme, exec, home, appHome, readTextFile, writeTextFile, props, closeOv
 import { agentRoot, claudeStatus, claudeConnect, claudeDisconnect, codexStatus, codexConnect, codexDisconnect, codexHooksOn, codexHooksEnable } from "./agents.js";
 import { TOAST_PLACES, CARD_ITEMS, ROW_KINDS, cardLayout, renderCard, TOP_ITEMS, topLayout, topItems, badge, WAITING } from "./card.js";
 import { cablePalette, cableLayers, cableDash, paintAt } from "./cables.js";
-import { hint, pie, chip, newSpaceButton, gearButton, dividerLine, renderTopBar, bellButton, statPill, word } from "./topbar.js";
+import { hint, pie, chip, newSpaceButton, gearButton, dividerLine, renderTopBar, bellButton, decisionsButton, searchButton, statPill, word } from "./topbar.js";
 
 const ELSEWHERE = "#f2bc78"; // the board's marigold: waits on another agent or a person
 const MONO = "JetBrains Mono";
@@ -51,7 +51,7 @@ const SKELETON = {
   blocked: { asks: [], notAsks: [], nothingForYou: [], todoLabels: [], patterns: { asks: [], notAsks: [] }, disable: [] },
 };
 // The board's display settings: [key, label, help, kind, slider options]. Fallbacks match the package defaults.
-const VIEW_DEFAULTS = { cables: true, cablesThroughCards: 5, contextRamp: [50, 85], stuckTask: 15, stuckShell: 15, stuckMonitor: 30, waitTask: true, waitShell: true, waitMonitor: true, waitHelper: true, glow: true, greyWhenSeen: true, doneTimer: true, activeRing: true, toastPlace: "top-right", toastArea: "board", noticeRead: "visit", cableColors: "rainbow" };
+const VIEW_DEFAULTS = { cables: true, cablesThroughCards: 5, contextRamp: [50, 85], stuckTask: 15, stuckShell: 15, stuckMonitor: 30, waitTask: true, waitShell: true, waitMonitor: true, waitHelper: true, decisionBlocks: true, decisionToast: true, decisionSound: false, decisionOrder: "oldest", decisionDiffOpen: true, glow: true, greyWhenSeen: true, doneTimer: true, activeRing: true, toastPlace: "top-right", toastArea: "board", noticeRead: "visit", cableColors: "rainbow" };
 // Each group says which tab shows it (user, 2026-11-17: what's about a card goes on the Card tab, under its layout).
 // A group whose settings belong together ({ tight: true }) has no lines between its rows (user, 2026-11-18); Look is tight
 // too: four switches of one kind. Sections are always set apart.
@@ -87,6 +87,18 @@ const DISPLAY = [
     ["waitMonitor", "Monitors", "A monitor it watches (CI, a deploy) until it ends.", "switch"],
     ["waitHelper", "Helper terminals", "A terminal it opened with hc (a shell it drives), while it's open.", "switch"],
   ], { tight: true }],
+  // Decisions agents queue for you (the ? in the top bar; user, 2026-11-20: some sat in Done while waiting on one).
+  ["Lanes", "decisions", [
+    ["decisionBlocks", "Keep it in Blocked", "An agent with a decision waiting on your answer shows in Blocked, with the reason Decision, not in Done. Working and Waiting agents stay where they are.", "switch"],
+  ]],
+  ["Alerts", "decisions", [
+    ["decisionToast", "Notify", "A notification when an agent asks a new decision, replies to your question, or changes its proposal.", "switch"],
+    ["decisionSound", "Sound", "Plays Herdr's \"blocked\" sound for the same events (once, however many arrive together).", "switch"],
+  ], { tight: true }],
+  ["Decisions dialog", "decisions", [
+    ["decisionOrder", "Tab order", "Decisions waiting on you come first either way; this orders them by when they were asked.", "choice", { choices: [["oldest", "Oldest first"], ["newest", "Newest first"]] }],
+    ["decisionDiffOpen", "Show changes open", "When an agent proposes new text for something that exists (a PR body, a ticket), show the changes to the current text open. Off folds them behind ▾.", "switch"],
+  ]],
 ];
 const mixHex = (a, b, f) => {
   if (![a, b].every((c) => /^#[0-9a-fA-F]{6}/.test(c))) return f < 0.5 ? a : b;
@@ -102,6 +114,7 @@ const TABS = [
   { key: "display", label: "Board" },
   { key: "card", label: "Card" },
   { key: "notices", label: "Notifications" },
+  { key: "decisions", label: "Decisions" },
   { key: "agents", label: "Agents" },
   { key: "people", label: "People", items: [
     { key: ["people", "names"], label: "People", placeholder: "Add a name, then Enter",
@@ -496,6 +509,7 @@ export class SettingsPanel {
       : {};
     return {
       address: "t42", program, name: "fix-login-flow", color: t.blocked, shown: false, flash: null,
+      decisions: 1,
       laneTime: { text: "12m", color: t.working },
       why: { icon: "mods/veroboard/icons/clock.svg", label: "You 4m", color: t.blocked },
       launched: 3, openedBy: "t22", openedByName: "release-plan", folder: "myapp", branch: { name: "feature/login-fix", worktree: true, state: null },
@@ -596,9 +610,8 @@ export class SettingsPanel {
       divider: dividerLine(t),
       gear: gearButton(t),
       bell: bellButton(t, 2),
-      filter: h_flex().w(100).h(27).flex_none().px(9).gap(6).items_center().rounded(6).bg(t.surface).border(1).border_color(t.border)
-        .child(div().flex_1().text_size(12).text_color(t.dim).child("Filter"))
-        .when(hint("veroboard.search") !== "", (el) => el.child(div().flex_none().text_size(10).text_color(t.dim).child(hint("veroboard.search")))),
+      decisions: decisionsButton(t, 1),
+      filter: searchButton(t),
     };
   }
 
@@ -1182,6 +1195,7 @@ export class SettingsPanel {
     const content = tab.key === "display" ? (this.user ? this.boardTab(t) : div())
       : tab.key === "card" ? (this.user ? this.cardTab(t) : div())
       : tab.key === "notices" ? (this.user ? this.noticesTab(t) : div())
+      : tab.key === "decisions" ? (this.user ? this.displayTab(t, "decisions") : div())
       : tab.key === "agents" ? this.agentsTab(t)
       : tab.key === "test" ? this.testTab(t)
       : tab.key === "rules" ? this.rulesTab(t)

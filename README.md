@@ -9,6 +9,8 @@ A Kanban board for your Claude Code and Codex agents, as a [Herdr](https://herdr
 - **Blocked says why:** a question for you, an open dialog, or who it's waiting on.
 - **⌘F** filters by anything on a card. **⌘1–⌘9** pick a space.
 - **Right-click** a card to pin it to Blocked or move it to Done.
+- **Decisions:** an agent queues what it needs you to approve, with the exact text. You answer in one dialog (the ?
+  in the top bar), and the answer goes back to the agent.
 - **Notifications** where you place them, over the board or the terminal, and a **bell** with the history, newest first.
 - **Child agents stay in their parent's space:** an agent's new tab opens next to it, not in the space you're viewing.
 - **The gear** opens settings: arrange the card and top bar, tune the Blocked rules, test a message.
@@ -33,8 +35,10 @@ What Connect adds. **Disconnect** takes out these and nothing else:
 | | | `subagentStatusLine` | Gives the card its sub-agent rows. If you have your own, it's kept and those rows don't show. |
 | | | `PreToolUse` hook (Bash) | The [launch guard](#launch-guard): a tab it opens for another agent lands in its own space, not the one you're viewing. |
 | | | `Stop`, `Notification` hooks | Ping the card: its glow, and the Blocked and Done clocks. |
+| | | `SessionStart` hook | Gives each session the [decision rules](#decisions): queue decisions with `decide.js` instead of asking in chat. Inside Herdr only. |
 | Codex | `~/.codex/hooks.json` | `SessionStart`, `UserPromptSubmit`, `PostToolUse`, `PermissionRequest`, `Stop`, `Interrupt` hooks | Run `hook.js`, which records the agent's facts for its card. |
 | | | `PreToolUse` hook (Bash) | The [launch guard](#launch-guard), as for Claude Code. |
+| | | `SessionStart` hook (Decision rules) | The [decision rules](#decisions), as for Claude Code. |
 | | `~/.codex/config.toml` | `hooks = true` under `[features]` | Codex runs hooks only with this on. Disconnect leaves it. |
 
 The board shows every agent without step 3, but only its lane, name and folder: the model, context, why it's blocked,
@@ -43,8 +47,8 @@ its sub-agents and the rest come from the connected scripts.
 ## Configure
 
 Every setting below is in the gear's dialog, one section per tab. Each change saves at once to
-`~/.config/veroboard/config.json` (the format: `config.example.json`). The Board, Card and Notifications settings go in
-its `"board"` section. A setting you leave out uses its default. Reset (beside a changed setting) puts it back.
+`~/.config/veroboard/config.json` (the format: `config.example.json`). The Board, Card, Notifications and Decisions settings go
+in its `"board"` section. A setting you leave out uses its default. Reset (beside a changed setting) puts it back.
 
 ### Board
 
@@ -62,10 +66,11 @@ The items, in their default order:
 |---|---|---|---|
 | Settings | `gear` | Left, 1st | Opens the settings. It can be moved, but not hidden. |
 | Notifications | `bell` | Left, 2nd | Lists what Herdr notified you about, newest first. The pill counts the new ones. |
-| Filter box | `filter` | Left, 3rd | Filters the board by session name (⌘F). |
-| Divider | `divider` | Left, 4th | A short line that sets items apart. + Divider adds more (`divider2`, `divider3`, …). Drag an added one into Hidden to remove it. |
-| Spaces | `spaces` | Left, 5th | All Spaces, then a chip for each space. Click a chip to show only that space's agents. |
-| New space | `newSpace` | Left, 6th | The + button. It opens a new space. |
+| Decisions | `decisions` | Left, 3rd | The ? button: opens the [Decisions](#decisions) dialog. The pill counts the decisions waiting on you, and turns it pink. |
+| Filter box | `filter` | Left, 4th | A search icon. Click it or press ⌘F and it opens as a box that filters the board by session name. Empty, it folds back on blur or Esc. |
+| Divider | `divider` | Left, 5th | A short line that sets items apart. + Divider adds more (`divider2`, `divider3`, …). Drag an added one into Hidden to remove it. |
+| Spaces | `spaces` | Left, 6th | All Spaces, then a chip for each space. Click a chip to show only that space's agents. |
+| New space | `newSpace` | Left, 7th | The + button. It opens a new space. |
 | Agent count | `count` | Right, 1st | How many agents are on the board, or how many match the filter. |
 | Status pie | `pie` | Right, 2nd | How the agents split between Blocked, Waiting, Working and Done. |
 
@@ -108,6 +113,7 @@ The badges, in their default order. The name always starts line 1.
 | Blocked reason | `why` | Line 1, right, 2nd | Why it's in Blocked (You, Prompt, Pinned, or who it waits on) and for how long. Hover it to see the rule. |
 | Agents it opened | `launched` | Line 1, right, 3rd | How many agents it opened that still run. |
 | Terminal ID | `address` | Line 1, right, 4th | Its Herdr terminal ID (`t21`): what `hc` and other agents call it. |
+| Decisions | `decisions` | Line 1, right, 5th | How many decisions this agent is waiting on you for. |
 | Opened by | `openedBy` | Hidden | The terminal ID of the agent that opened it, while that agent runs. Hover it to see that agent's name. Useful with patch cables off. Shown, it goes to line 1, right. |
 | Folder | `folder` | Line 2, left | The last folder of where it runs. |
 | Branch | `branch` | Line 2, right | Its git branch. Blue with a layers icon in a worktree. A merge or rebase in progress shows next to it. |
@@ -182,6 +188,35 @@ Send a test (Try it) shows a test notification where you picked. The dialog clos
 | Mark as read | `noticeRead` | On visit | `open` (On open), `visit` (On visit), `hand` (By hand) | When a notification counts as read. On open: opening the bell's list marks all it shows. On visit: clicking it, or going to its agent's terminal any other way (its card, its tab, a key). By hand: clicking it, or its ✓ in the list. |
 
 In every mode, each row in the list has ✓ or ↺ (mark read or unread) and × (remove), and Mark all read works.
+
+### Decisions
+
+An agent that needs your approval (text to post, a merge, a pick between options) queues a decision instead of asking
+in chat. You see the exact text it proposes and answer in the Decisions dialog: the ? in the top bar, or right-click a
+card and pick the decision. The answer goes back to the agent as a message (`hc send`).
+
+- **One tab per decision**, labeled with its ticket, PR or a short name. Those waiting on you come first. **Open** and
+  **Archive** switch lists; the archive keeps the last 200, and you can clear all of it or remove one.
+- **The thread reads like a chat.** The proposal, rendered as markdown (or **Raw**, to select and copy any part), with
+  code in its language's colors. Your questions sit on the right, the agent's replies on the left. When the agent
+  changes its proposal, "updated the proposal ▾" shows what changed from the version before.
+- **Changes to the current text.** When the agent edits something that exists (a PR body, a ticket), it passes the
+  live text too, and the dialog shows the diff above the new text.
+- **Answer** with one button per option (Yes / No unless the agent gave others), or **Ask** (⌘Enter) to ask a
+  question first. Enter adds a line. **Go to agent** jumps to its terminal; **Dismiss** closes the
+  decision without telling the agent.
+
+The rules reach each agent through the `SessionStart` hook that Connect adds. Agents run
+`mods/veroboard/agent/core/decide.js` (`--help` lists every command); decisions live in
+`~/.config/veroboard/state/decisions/`.
+
+| Setting | Key | Default | Choices | What it does |
+|---|---|---|---|---|
+| Keep it in Blocked | `decisionBlocks` | On | On, Off | An agent with a decision waiting on you shows in Blocked, with the reason Decision, not in Done. Working and Waiting agents stay where they are. A card you moved to Done by hand stays there. |
+| Notify | `decisionToast` | On | On, Off | A notification when an agent asks a new decision, replies to your question, or changes its proposal. |
+| Sound | `decisionSound` | Off | On, Off | Herdr's "blocked" sound for the same events, once however many arrive together. |
+| Tab order | `decisionOrder` | Oldest first | `oldest`, `newest` | Decisions waiting on you come first either way; this orders them by when they were asked. |
+| Show changes open | `decisionDiffOpen` | On | On, Off | Show "Changes to the current text" open. Off folds it behind ▾. |
 
 ### Blocked rules
 
@@ -284,6 +319,9 @@ another space, the agent passes that one. Every other command exits in under 5 m
 - Other agents Herdr runs show up as basic cards: lane, name and folder.
 - The Blocked rules were tuned on one person's agents. Expect some cards in the wrong lane, and tune the rules.
 - A card updates when Claude Code reruns the status line, so an idle agent can lag a little.
+- A card you move to Done by hand doesn't go back to Blocked for a new decision until its agent's next prompt.
+- "Changes to the current text" compares against the live text when the agent queued it. An edit made elsewhere since
+  then doesn't show until the agent queues it again.
 
 ## Uninstall
 
@@ -297,6 +335,9 @@ First the gear → **Agents** → **Disconnect** for each agent. Then delete `~/
 ## Development
 
 `./export.sh` copies your live setup into this folder. Tests: `node tests/agents.test.js`, `node tests/rules.test.js`, `node tests/codex.test.js`, `node tests/guard.test.js`,
-`node tests/topbar.test.js`, `node tests/rows.test.js`, `node tests/view.test.js` and `bash tests/install.test.sh`.
+`node tests/topbar.test.js`, `node tests/rows.test.js`, `node tests/view.test.js` and `bash tests/install.test.sh`. The
+decision queue's own: `node veroboard/mods/veroboard/agent/tests/decide.test.cjs`,
+`node veroboard/mods/veroboard/agent/tests/decisions-context.test.cjs` and
+`node veroboard/mods/veroboard-decisions/tests/decisions.test.cjs`.
 
 Pairs well with [Dusk](https://github.com/lukevers/herdr-dusk). MIT licensed.

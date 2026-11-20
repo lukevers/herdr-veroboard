@@ -12,7 +12,7 @@ mkdir -p "$APP"
 printf '{"global":{"cmd-t":"tab.new"},"layout:veroboard":{"cmd-f":"something.else"}}' > "$APP/keys.json"
 fail=0; check() { if eval "$2"; then echo "ok   $1"; else echo "FAIL $1"; fail=1; fi; }
 out="$("$PKG/install.sh" 2>&1)"
-check "layout and mods installed" '[ -f "$APP/layouts/veroboard.json" ] && [ -f "$APP/mods/veroboard/main.js" ] && [ -f "$APP/mods/veroboard-menu/main.js" ] && [ -f "$APP/mods/veroboard-toast/main.js" ]'
+check "layout and mods installed" '[ -f "$APP/layouts/veroboard.json" ] && [ -f "$APP/mods/veroboard/main.js" ] && [ -f "$APP/mods/veroboard-menu/main.js" ] && [ -f "$APP/mods/veroboard-toast/main.js" ] && [ -f "$APP/mods/veroboard-decisions/main.js" ]'
 check "the agent scripts come inside the board mod" '[ -f "$AG/core/rules.js" ] && [ -f "$AG/core/launch-guard.sh" ] && [ -f "$AG/adapters/claude/tap.js" ] && [ -f "$AG/adapters/codex/hook.js" ]'
 check "nothing written outside Herdr's home" '[ ! -e "$HOME/.config/veroboard" ] && [ ! -e "$HOME/.claude" ] && [ ! -e "$HOME/.codex" ]'
 check "points to the Agents tab" 'grep -q "Agents → Connect" <<<"$out"'

@@ -10,10 +10,12 @@ import {
 // The patch cables' drawing (shared with the settings dialog's example).
 import { cablePalette, cableLayers } from "./cables.js";
 // The top bar's pieces and how they're arranged (Veroboard settings → Board).
-import { SYMBOL, hint, pie, chip, newSpaceButton, gearButton, dividerLine, renderTopBar, bellButton, statPill, word } from "./topbar.js";
+import { SYMBOL, hint, pie, chip, newSpaceButton, gearButton, dividerLine, renderTopBar, bellButton, decisionsButton, searchButton, statPill, word } from "./topbar.js";
 // Veroboard settings: this mod opened as a dialog (mod.open veroboard) is the settings panel, not a board.
 import { SettingsPanel } from "./settings.js";
-import { agents, spaces, panes, terminals, focused, appHome, props, run, openOverlay, closeOverlay, setAgentOrder, theme, keys, nextCommand, shared, setShared, window, layout, readTextFile, watchFolder, home, settings, exec } from "herdr";
+import { agents, spaces, panes, terminals, focused, appHome, props, run, openOverlay, closeOverlay, setAgentOrder, theme, keys, nextCommand, shared, setShared, window, layout, readTextFile, watchFolder, home, settings, exec, notify, checking, playSound } from "herdr";
+// What marks a notification as a decision's (enrichNotices; the toasts show its title).
+const DECISION_ICON = "mods/veroboard/question.svg";
 
 // The board's columns, by urgency. Herdr reports blocked, working, done (finished, not yet seen) and idle;
 // the board splits Herdr's done and idle by whether the agent still has something running for it:
@@ -100,11 +102,13 @@ export default class Board extends View {
     if (props()?.role === "header") {
       this.search = InputState.new({ placeholder: "Filter", value: shared("veroboard.query") ?? "" });
       this.search.on("change", () => setShared("veroboard.query", this.search.value()));
+      // Folded to a search icon until opened (user, 2026-11-20); leaving it empty folds it again.
+      this.search.on("blur", (_e, cx) => { if (!this.search.value()) { this.searchOpen = false; cx.notify(); } });
     }
     if (props()?.role === "header") cx.spawn(async (cx) => {
       for (;;) {
         const c = await nextCommand();
-        if (c === "search") this.search?.focus();
+        if (c === "search") { this.searchOpen = true; this.search?.focus(); cx.notify(); }
         if (c === "all") setShared("veroboard.scope", "all");
         else if (/^space[1-9]$/.test(c)) {
           const index = Number(c.slice(5));
@@ -124,6 +128,22 @@ export default class Board extends View {
     // The notices over the terminal (toastArea "terminal"): a copy of this mod in a frameless window (syncToastWindow).
     // It only draws them; the board copy keeps them.
     if (props()?.role === "toasts") return;
+    // Only the board owns queue reads and new-decision notifications (user, 2026-11-20).
+    this.decisions = [];
+    if (!props()?.role && !checking()) {
+      this.decisionSeen = new Map();
+      cx.timer.every(30000, cx => cx.spawn(async cx => { await this.loadDecisions(); cx.notify(); }));
+      cx.spawn(async cx => {
+        await this.loadDecisions();
+        cx.notify();
+        for (;;) {
+          try { await watchFolder(`${home()}/.config/veroboard/state/decisions`); }
+          catch { await cx.sleep(5000); }
+          await this.loadDecisions();
+          cx.notify();
+        }
+      });
+    }
     if (!props()?.role) cx.timer.every(200, () => this.syncToastWindow());
     if (!props()?.role) cx.timer.every(1000, () => {
       this.enrichNotices();
@@ -194,6 +214,46 @@ export default class Board extends View {
         cx.notify();
       }));
     }
+  }
+  async loadDecisions() {
+    if (this.decisionsLoading) { this.decisionsAgain = true; return; }
+    this.decisionsLoading = true;
+    try {
+      do {
+        this.decisionsAgain = false;
+        const node = await readTextFile(`${home()}/.config/veroboard/state/node-path`).then(x => x.trim(), () => "node");
+        const r = await exec(node || "node", [`${appHome()}/mods/veroboard/agent/core/decide.js`, "list", "--all"], { timeout: 10000 });
+        if (r.code !== 0) throw new Error(r.stderr || `decide.js exited ${r.code}`);
+        const decisions = JSON.parse(r.stdout), counts = Object.create(null), since = Object.create(null), seen = new Map();
+        let chime = false;
+        for (const d of decisions) {
+          const key = JSON.stringify([d.terminal, d.id]), last = d.thread.at(-1);
+          const previous = this.decisionSeen.get(key), entry = JSON.stringify([d.thread.length, last]);
+          const fresh = !previous || previous.at !== d.at;
+          if (d.waiting === "you") { counts[d.terminal] = (counts[d.terminal] ?? 0) + 1; since[d.terminal] = Math.min(since[d.terminal] ?? Infinity, d.at); }
+          // Your questions clear the badge without notifying; only the agent's next turn alerts you (user, 2026-11-20).
+          if (this.decisionsLoaded && last?.from !== "you" && (fresh || last?.from === "agent" && previous.entry !== entry)) {
+            const name = agents().find(a => a.address === d.terminal)?.tab_name || d.terminal;
+            const title = fresh ? `${name} needs a decision` : last.kind === "reply" ? `${name} replied` : `${name} updated a decision`;
+            // Veroboard settings → Decisions: the toast and the sound each switch off/on (user, 2026-11-20).
+            if (VIEW.decisionToast !== false) notify({ title, body: `${d.short} · ${d.title}`, level: "warning", icon: DECISION_ICON, action: { name: "agent.focus", args: { terminal: d.terminal } } });
+            chime = true;
+          }
+          seen.set(key, { at: d.at, entry });
+        }
+        // One sound per batch, however many arrived together.
+        if (chime && VIEW.decisionSound === true) playSound("blocked");
+        this.decisionSeen = seen;
+        this.decisions = decisions;
+        this.decisionsLoaded = true;
+        const count = decisions.filter(d => d.waiting === "you").length;
+        if (shared("veroboard.decisionCount") !== count) setShared("veroboard.decisionCount", count);
+        if (JSON.stringify(shared("veroboard.decisionCounts")) !== JSON.stringify(counts)) setShared("veroboard.decisionCounts", counts);
+        // The oldest decision waiting on you, per agent: every copy's column() reads it (the decision rule below).
+        if (JSON.stringify(shared("veroboard.decisionSince")) !== JSON.stringify(since)) setShared("veroboard.decisionSince", since);
+      } while (this.decisionsAgain);
+    } catch (e) { console.log(`Decisions: ${e.message ?? e}`); }
+    finally { this.decisionsLoading = false; }
   }
   async reload() {
     const subs = {};
@@ -287,6 +347,7 @@ export default class Board extends View {
       address: a.address, program: a.program, name: a.tab_name, color: state.color, shown,
       flash: VIEW.glow && flashT >= 0 && flashT < 1 ? flashT : null,
       laneTime, why,
+      decisions: this.decisions.filter(d => d.terminal === a.address && d.waiting === "you").length,
       launched: (session?.launched ?? []).filter(live).length,
       // The agent that opened it, while that one runs (the Opened by badge; off by default).
       ...(() => { const p = this.parentOf(a.address); return p && live(p) ? { openedBy: p, openedByName: agents().find(x => x.address === p)?.tab_name ?? "" } : {}; })(),
@@ -306,8 +367,16 @@ export default class Board extends View {
     return renderCard(m, t, {
       onClick: () => run("agent.focus", { terminal: a.address }),
       // The menu: Pin to Blocked / Unpin, Move to Done (in Blocked), Open. 31px a row and 10px of padding.
-      onRightClick: () => openOverlay({ mod: "veroboard-menu", kind: "popup", width: 200, height: (state.key === "blocked" ? 3 : 2) * 31 + 10,
-        props: { terminal: a.address, blocked: state.key === "blocked" } }),
+      // Its open decisions, waiting on you first, each one a menu item that opens the Decisions dialog on it (user,
+      // 2026-11-20), under a divider that's there only when there are some (9px). Keep in step with mods/veroboard-menu.
+      onRightClick: () => {
+        const mine = this.decisions.filter(d => d.terminal === a.address)
+          .sort((x, y) => Number(x.waiting !== "you") - Number(y.waiting !== "you") || x.at - y.at)
+          .map(d => ({ key: JSON.stringify([d.terminal, d.id]), title: d.title, waiting: d.waiting === "you" }));
+        openOverlay({ mod: "veroboard-menu", kind: "popup", width: 240,
+          height: ((state.key === "blocked" ? 3 : 2) + mine.length) * 31 + (mine.length ? 9 : 0) + 10,
+          props: { terminal: a.address, blocked: state.key === "blocked", decisions: mine } });
+      },
     });
   }
   // How many background bars hang under a card (same rules as card()): each is 22px under the 76px card.
@@ -359,6 +428,11 @@ export default class Board extends View {
     const defaults = await json(`${appHome()}/mods/veroboard/agent/core/defaults.json`);
     const mine = await json(`${home()}/.config/veroboard/config.json`);
     setView(viewFrom(defaults.board, mine.board));
+    // The Decisions dialog is its own mod: it reads its tab order from here (Veroboard settings → Decisions).
+    const order = VIEW.decisionOrder === "newest" ? "newest" : "oldest";
+    if (shared("veroboard.decisionOrder") !== order) setShared("veroboard.decisionOrder", order);
+    const diffOpen = VIEW.decisionDiffOpen !== false;
+    if (shared("veroboard.decisionDiffOpen") !== diffOpen) setShared("veroboard.decisionDiffOpen", diffOpen);
   }
   laneFit(cards) {
     const zoom = Number(settings()?.zoom) || 1;
@@ -499,14 +573,24 @@ export default class Board extends View {
       || (VIEW.waitHelper !== false && helpers) || (VIEW.waitShell !== false && waitShells)) return "waiting";
     // Idle after messaging another agent and saying it waits for the answer (facts.js `awaiting`): stuck
     // until that agent replies, so Blocked rather than Done. The reply is a new prompt, which clears it.
-    return this.awaiting(a) && !dismissed ? "blocked" : "done";
+    if (this.awaiting(a) && !dismissed) return "blocked";
+    // A decision waiting on your answer keeps it out of Done: it's blocked on you (user, 2026-11-20). Working and Waiting
+    // stay put (returned above); a card you moved to Done by hand stays there. Veroboard settings → Decisions turns it off.
+    return this.decisionSince(a) != null && !dismissed ? "blocked" : "done";
+  }
+  // When its oldest decision waiting on you was asked, or null (none, or the rule is off).
+  decisionSince(a) {
+    if (VIEW.decisionBlocks === false) return null;
+    const at = (shared("veroboard.decisionSince") ?? {})[a.address];
+    return Number.isFinite(at) ? at : null;
   }
   // Why a card is in Blocked, as { icon, label, color, at }, or null when it isn't. First match wins:
   //  1. Pinned: you moved it there by hand (right-click), since the mark's time.
   //  2. Prompt: Herdr says blocked, i.e. a dialog is open in its tab (a question or a permission ask), since
   //     Claude Code's Notification ping (pings/<id>.json) if newer than your last prompt, else since the board saw it blocked.
-  //  3. You: its last message asks you something (facts.js awaiting.to === "you").
-  //  4. <who>: it waits on another agent or a person ("t22", "Luke").
+  //  3. You: its last message asks you something (facts.js awaiting.to === "you"), when no decision explains it better.
+  //  4. Decision: a decision it queued waits on your answer (Veroboard settings → Decisions; user, 2026-11-20).
+  //  5. <who>: it waits on another agent or a person ("t22", "Luke").
   blockReason(a) {
     if (a.status === "working") return null;
     const t = theme();
@@ -521,7 +605,13 @@ export default class Board extends View {
         at: this.promptSince(a) };
     }
     if (this.column(a) !== "blocked") return null;
-    const w = this.awaiting(a);
+    const w = this.awaiting(a), since = this.decisionSince(a);
+    // A decision waiting on you is the clearer reason, so it comes before what its last message says.
+    if (since != null) {
+      const n = Number((shared("veroboard.decisionCounts") ?? {})[a.address]) || 1;
+      return { icon: "mods/veroboard/question.svg", label: "Decision", color: t.blocked, at: since,
+        tip: `Waiting on your answer to ${n} decision${n === 1 ? "" : "s"}. Open Decisions (the ? in the top bar) to answer.` };
+    }
     if (!w) return null;
     // The hover names the rule that decided it (facts.js awaiting.rule), so a wrong lane can be fixed in Veroboard settings (the gear).
     const rule = typeof w.rule === "string" ? ` Rule: ${w.rule}${this.ruleWhy?.[w.rule] ? `: ${this.ruleWhy[w.rule]}` : ""}.` : "";
@@ -574,7 +664,10 @@ export default class Board extends View {
         parent: up ? { address: up, name: agents().find((x) => x.address === up)?.tab_name ?? "" } : null,
       };
     })();
-    for (const [k, l] of lists) if (l.some(need)) setShared(k, l.map((n) => (need(n) ? { ...n, agent: snap(n.action.args.terminal) } : n)));
+    // A decision's notice (it carries the question icon): "Decision" in the Blocked color, and its title as the second
+    // line, not the agent's lane and branch (user, 2026-11-20: "Working" said nothing about why it popped up).
+    const asDecision = (n, g) => (n.icon === DECISION_ICON ? { ...g, why: { label: "Decision", color: stateColor(t, "blocked") }, decision: n.body ?? "" } : g);
+    for (const [k, l] of lists) if (l.some(need)) setShared(k, l.map((n) => (need(n) ? { ...n, agent: asDecision(n, snap(n.action.args.terminal)) } : n)));
   }
   // `floating`: drawn in the window over the terminal (role "toasts"), in its own flow; else on the board, placed by
   // toastPlace, and not at all when they go over the terminal.
@@ -630,7 +723,7 @@ export default class Board extends View {
           // No age: a notice on the board is always "now" (user, 2026-11-18). The bell's list keeps it.
           .when(Boolean(g.why?.label), (el) => el.child(pill(g.why.label, g.why.color, alpha(g.why.color, "26"))))
           .when(Boolean(g.address), (el) => el.child(pill(g.address, t.muted, t.raised, true))))
-        .child(h_flex().h(16).flex_none().gap(5).items_center().overflow_hidden()
+        .child(typeof g.decision === "string" ? div().h(16).flex_none().truncate().text_size(12).text_color(t.muted).child(g.decision) : h_flex().h(16).flex_none().gap(5).items_center().overflow_hidden()
           .when(Boolean(g.space), (el) => el.child(pill(g.space, t.muted)))
           // As on the card: a branch in a linked worktree is blue with the layers icon.
           .when(Boolean(g.branch), (el) => el.child(g.branch.worktree
@@ -832,6 +925,14 @@ export default class Board extends View {
       divider: dividerLine(t),
       // Veroboard settings (settings.js, opened as this mod's dialog; user, 2026-11-17).
       gear: gearButton(t).on_click(() => run("mod.open", { name: "veroboard" })),
+      // The decision queue (mods/veroboard-decisions): a dialog like the settings, centered, 75% of the window each way,
+      // measured when it opens (user, 2026-11-20: more room for the chat). Not drawn yet: its mod.json's 852×760.
+      decisions: decisionsButton(t, Number(shared("veroboard.decisionCount")) || 0).on_click(() => {
+        let vp = null;
+        try { vp = globalThis.window.viewport_size(); } catch (_) { /* not drawn yet */ }
+        openOverlay({ mod: "veroboard-decisions", kind: "dialog",
+          width: vp ? Math.round(vp.width * 0.75) : 852, height: vp ? Math.round(vp.height * 0.75) : 760 });
+      }),
       // The notification list (mods/veroboard-toast, opened as a popup at the pointer). It follows the board's space
       // (user, 2026-11-18): with one space selected, the bell counts and the list shows that space's notifications
       // (and Herdr's own, which belong to no space); with All Spaces, all of them. The list has chips to pick another.
@@ -870,14 +971,18 @@ export default class Board extends View {
           openOverlay({ mod: "veroboard-toast", kind: "popup", width: 380, height, ...(at ? { at } : {}),
             props: { view: "history", mode, fresh, space: sp?.id ?? null, listH, bar, seenBefore: Number(shared("veroboard.noticesSeen")) || 0 } });
         }),
-      filter: h_flex().id("board-search").w(100).h(27).flex_none().px(9).gap(6).items_center().rounded(6)
+      // Folded (nothing typed, not opened): the search icon and ⌘F. Opened by a click or ⌘F: the box, focused, 180px.
+      filter: !query && !this.searchOpen
+        ? searchButton(t).on_click((_e, cx) => { this.searchOpen = true; this.search?.focus(); cx.notify(); })
+        : h_flex().id("board-search").w(180).h(27).flex_none().px(9).gap(6).items_center().rounded(6)
         .tooltip("Matches anything on a card: name, id, model, effort, space, folder, branch, lane, why it's blocked, background work. Several words must all match.")
-        .bg(t.surface).border(1).border_color(query ? alpha(t.accent, "55") : t.border)
-        .on_key_down((e) => { if (e.key === "escape") { this.search?.set_value(""); setShared("veroboard.query", ""); } })
+        .bg(t.surface).border(1).border_color(alpha(t.accent, "55"))
+        .on_key_down((e, cx) => { if (e.key === "escape") { this.search?.set_value(""); setShared("veroboard.query", ""); this.searchOpen = false; cx.notify(); } })
+        .child(svg("mods/veroboard/icons/search.svg").size(13).flex_none().text_color(query ? t.accent : t.muted))
         .child(Input.new(this.search).flex_1().min_w(0).h(25).text_size(12).text_color(t.foreground))
         .when(!query && hint("veroboard.search") !== "", el => el.child(div().flex_none().text_size(10).text_color(t.dim).child(hint("veroboard.search"))))
         .when(Boolean(query), el => el.child(div().id("board-search-clear").flex_none().text_size(12).text_color(t.muted).cursor_pointer()
-          .hover(s => s.text_color(t.foreground)).on_click(() => { this.search?.set_value(""); setShared("veroboard.query", ""); }).child("×"))),
+          .hover(s => s.text_color(t.foreground)).on_click((_e, cx) => { this.search?.set_value(""); setShared("veroboard.query", ""); this.searchOpen = false; cx.notify(); }).child("×"))),
     }, t));
     if (role === "terminals") {
       return h_flex().size_full().pl(16).pr(10).items_center().gap(8).bg(t.surface)

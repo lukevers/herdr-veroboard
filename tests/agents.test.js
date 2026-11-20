@@ -24,12 +24,15 @@ test('the root: this mod\'s agent folder, as ~/… under your home', () => {
   assert.strictEqual(m.agentRoot('/Users/x/.config/herdr-app', '/Users/x'), ROOT);
   assert.strictEqual(m.agentRoot('/opt/herdr', '/Users/x'), '/opt/herdr/mods/veroboard/agent');
 });
-test('Claude, nothing yet: off; connecting adds all five, and then it is connected', () => {
+test('Claude, nothing yet: off; connecting adds all six, and then it is connected', () => {
   assert.strictEqual(m.claudeStatus('', ROOT).state, 'off');
   const r = m.claudeConnect('{"model":"opus"}', ROOT);
-  assert.strictEqual(r.changes.length, 5);
+  assert.strictEqual(r.changes.length, 6);
   const s = JSON.parse(r.text);
   assert.strictEqual(s.model, 'opus');
+  // The decision rules: a SessionStart hook that prints them for the session's context (2026-11-20).
+  assert.strictEqual(s.hooks.SessionStart[0].hooks[0].command, `node ${ROOT}/core/decisions-context.js claude`);
+  assert.strictEqual(m.claudeStatus(r.text, ROOT).pieces.find((p) => p.key === 'SessionStart').label, 'Decision rules');
   assert.strictEqual(s.statusLine.command, `node ${ROOT}/adapters/claude/tap.js --`);
   assert.strictEqual(m.claudeStatus(r.text, ROOT).state, 'connected');
   assert.deepStrictEqual(m.claudeConnect(r.text, ROOT).changes, [], 'connecting again changes nothing');
@@ -43,8 +46,8 @@ test('Claude, a status line of your own: wrapped after "--", and given back on d
   const back = JSON.parse(m.claudeDisconnect(r.text).text);
   assert.deepStrictEqual(back, JSON.parse(mine));
 });
-test('Claude, the old install: "old"; Update points every piece here and keeps the rest', () => {
-  assert.strictEqual(m.claudeStatus(oldClaude, ROOT).state, 'old');
+test('Claude, the old install: "partial" (it predates the decision rules); Update points every piece here and keeps the rest', () => {
+  assert.strictEqual(m.claudeStatus(oldClaude, ROOT).state, 'partial');
   const r = m.claudeConnect(oldClaude, ROOT), s = JSON.parse(r.text);
   assert.strictEqual(m.claudeStatus(r.text, ROOT).state, 'connected');
   assert.strictEqual(s.statusLine.command, `node ${ROOT}/adapters/claude/tap.js -- node ~/.claude/statusline.js`);
@@ -88,14 +91,15 @@ test('Claude, a broken settings file is refused, not overwritten', () => {
   assert.throws(() => m.claudeConnect('{ not json', ROOT));
   assert.throws(() => m.claudeStatus('[1,2]', ROOT));
 });
-test('Codex: connect adds six event hooks and the guard; old ones are pointed here; disconnect keeps yours', () => {
+test('Codex: connect adds six event hooks, the guard and the decision rules; old ones are pointed here; disconnect keeps yours', () => {
   const mine = JSON.stringify({ hooks: { Stop: [{ hooks: [{ type: 'command', command: 'my-stop' }] }],
     SessionStart: [{ hooks: [{ type: 'command', command: `node ${OLD}/adapters/codex/hook.js`, timeout: 5 }] }] } });
   assert.strictEqual(m.codexStatus(mine, ROOT).state, 'partial');
   const r = m.codexConnect(mine, ROOT), s = JSON.parse(r.text);
-  assert.strictEqual(r.changes.length, 7);
+  assert.strictEqual(r.changes.length, 8);
   assert.strictEqual(m.codexStatus(r.text, ROOT).state, 'connected');
-  assert.strictEqual(s.hooks.SessionStart.length, 1, 'the old hook was pointed here, not doubled');
+  assert.strictEqual(s.hooks.SessionStart.length, 2, 'the old hook was pointed here, not doubled; the rules hook beside it');
+  assert.strictEqual(s.hooks.SessionStart[1].hooks[0].command, `node ${ROOT}/core/decisions-context.js codex`);
   assert.strictEqual(s.hooks.PreToolUse[0].matcher, 'Bash');
   assert.strictEqual(s.hooks.PreToolUse[0].hooks[0].command, `sh ${ROOT}/core/launch-guard.sh codex`);
   const back = JSON.parse(m.codexDisconnect(r.text).text);

@@ -182,7 +182,8 @@ export default class VeroboardToast extends View {
             .when(Boolean(n.agent.why?.label), (el) => el.child(pill(t, `${n.agent.why.label} ${ago(now - n.at)}`, n.agent.why.color, alpha(n.agent.why.color, "26"))))
             .child(pill(t, n.agent.address, t.muted, t.raised, true)))
           // Always there, empty or not (one space shown and no branch or parent), so every row is laid out alike.
-          .child(h_flex().h(16).flex_none().gap(5).items_center().overflow_hidden()
+          // A decision's notice: its title instead (as on the board's toast; user, 2026-11-20).
+          .child(typeof n.agent.decision === "string" ? div().h(16).flex_none().truncate().text_size(12).text_color(t.muted).child(n.agent.decision) : h_flex().h(16).flex_none().gap(5).items_center().overflow_hidden()
             // Its space, hidden when the list shows one space only (as on the cards).
             .when(Boolean(n.agent.space) && !sp, (el) => el.child(pill(t, n.agent.space, t.muted)))
             // As on the card: a branch in a linked worktree is blue with the layers icon.

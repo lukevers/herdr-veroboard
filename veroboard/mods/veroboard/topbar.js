@@ -9,7 +9,7 @@ import { alpha, dot, mix, VIEW, topLayout, isAddedDivider } from "./card.js";
 const SYMBOL = { cmd: "⌘", ctrl: "⌃", alt: "⌥", shift: "⇧" };
 
 const hint = action => keys().find(k => k.section === "layout:veroboard" && k.action === action)?.keys
-  .split("-").map(k => SYMBOL[k] ?? k).join("") ?? "";
+  .split("-").map(k => SYMBOL[k] ?? (k.length === 1 ? k.toUpperCase() : k)).join("") ?? "";
 
 // The header's status pie: one slice per column, sized by its agent count, clockwise from
 // 12 o'clock in column order. Grey with no agents.
@@ -46,13 +46,30 @@ const chip = (t, label, selected = false, hotkey = "") => h_flex().h(27).px(11).
   .when(hotkey !== "", el => el.child(div().text_size(10).text_color(selected ? alpha(t.accent, "99") : t.dim).child(hotkey)));
 
 // The notification bell (user, 2026-11-18): what Herdr notified, kept by mods/veroboard-toast; a click opens the list.
-// A small accent pill counts the ones since you last opened it.
+// A small accent pill counts the ones since you last opened it; the bell turns accent too, as Decisions turns pink, with the
+// selected space chip's wash behind it (accent at 26; user, 2026-11-20).
 const bellButton = (t, unread = 0) => h_flex().id("board-bell").relative().size(27).flex_none().items_center().justify_center().rounded(6)
-  .cursor_pointer().bg(t.surface).border(1).border_color(unread ? alpha(t.accent, "55") : t.border).text_color(unread ? t.foreground : t.muted)
+  .cursor_pointer().bg(unread ? alpha(t.accent, "26") : t.surface).border(1).border_color(unread ? alpha(t.accent, "55") : t.border).text_color(unread ? t.accent : t.muted)
   .tooltip("Notifications").hover((s) => s.bg(t.hover).text_color(t.foreground))
   .child(svg("mods/veroboard/bell.svg").size(13))
   .when(unread > 0, (el) => el.child(h_flex().absolute().top(-6).right(-7).min_w(15).h(15).px(4).rounded(8).items_center().justify_center()
     .bg(t.accent).text_color(t.accent_foreground ?? t.canvas).text_size(9.5).font_semibold().child(unread > 9 ? "9+" : String(unread))));
+
+// Only decisions waiting on you count; the dialog keeps every conversation (user, 2026-11-20).
+const decisionsButton = (t, n = 0) => h_flex().id("board-decisions").relative().size(27).flex_none().items_center().justify_center().rounded(6)
+  .cursor_pointer().bg(n ? alpha(t.blocked, "26") : t.surface).border(1).border_color(n ? alpha(t.blocked, "55") : t.border).text_color(n ? t.blocked : t.muted)
+  .tooltip(n ? `${n} decision${n === 1 ? "" : "s"} waiting on you` : "Decisions").hover(s => s.bg(t.hover).text_color(t.foreground))
+  .child(svg("mods/veroboard/question.svg").size(13))
+  .when(n > 0, el => el.child(h_flex().absolute().top(-6).right(-7).min_w(15).h(15).px(4).rounded(8).items_center().justify_center()
+    .bg(t.blocked).text_color(t.canvas).text_size(9.5).font_semibold().child(n > 9 ? "9+" : String(n))));
+
+// The filter, folded (user, 2026-11-20): a search icon and its key (⌘F), as tall as the other buttons. A click or ⌘F
+// opens the box in its place (main.js), focused; it folds back when it loses focus with nothing typed, or on Esc.
+const searchButton = (t) => h_flex().id("board-search-open").h(27).px(8).gap(5).flex_none().items_center().justify_center().rounded(6)
+  .cursor_pointer().bg(t.surface).border(1).border_color(t.border).text_color(t.muted).tooltip("Filter the board")
+  .hover((s) => s.bg(t.hover).text_color(t.foreground))
+  .child(svg("mods/veroboard/icons/search.svg").size(13).flex_none())
+  .when(hint("veroboard.search") !== "", (el) => el.child(div().flex_none().text_size(10).text_color(t.dim).child(hint("veroboard.search"))));
 
 // The agent count: one slim pill as tall as the status pie (18px; user, 2026-11-18), like the cards' badges.
 // Segments are [strong, soft]: the number bright, its word muted, a thin divider between segments.
@@ -104,4 +121,4 @@ const renderTopBar = (pieces, t, o = {}) => {
     .children(line.right.map(place).filter(Boolean));
 };
 
-export { statPill, word, bellButton, SYMBOL, hint, pie, chip, newSpaceButton, gearButton, dividerLine, renderTopBar };
+export { statPill, word, bellButton, decisionsButton, searchButton, SYMBOL, hint, pie, chip, newSpaceButton, gearButton, dividerLine, renderTopBar };

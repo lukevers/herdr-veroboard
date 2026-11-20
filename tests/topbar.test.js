@@ -9,15 +9,18 @@ let failed = 0;
 const test = (name, fn) => { try { fn(); console.log(`ok   ${name}`); } catch (e) { failed++; console.log(`FAIL ${name}: ${e.message}`); } };
 const line = (L) => L.lines[0];
 
-test('default bar: gear, bell, filter, divider, spaces, + | count, pie', () => {
+test('default bar: gear, bell, decisions, filter, divider, spaces, + | count, pie', () => {
   const L = topLayout(null);
-  assert.deepStrictEqual(line(L), { left: ['gear', 'bell', 'filter', 'divider', 'spaces', 'newSpace'], right: ['count', 'pie'] });
+  assert.deepStrictEqual(line(L), { left: ['gear', 'bell', 'decisions', 'filter', 'divider', 'spaces', 'newSpace'], right: ['count', 'pie'] });
   assert.deepStrictEqual(L.hidden, []);
 });
 test('added dividers stay where they are placed, on either side', () => {
   const L = topLayout({ lines: [{ left: ['gear', 'divider2', 'spaces'], right: ['count', 'divider3', 'pie'] }], hidden: [] });
-  assert.deepStrictEqual(line(L).left.slice(0, 3), ['gear', 'divider2', 'spaces']);
-  assert.deepStrictEqual(line(L).right.slice(0, 3), ['count', 'divider3', 'pie']);
+  // Items the saved bar leaves out land where they ship (bell and decisions after the gear; 2026-11-20), so check order.
+  const order = (side, ids) => ids.map((id) => line(L)[side].indexOf(id));
+  const [g, d2, s] = order('left', ['gear', 'divider2', 'spaces']), [c, d3, p] = order('right', ['count', 'divider3', 'pie']);
+  assert(g >= 0 && g < d2 && d2 < s, `left: ${line(L).left}`);
+  assert(c >= 0 && c < d3 && d3 < p, `right: ${line(L).right}`);
 });
 test('an added divider dragged into Hidden is removed; the shipped one stays hideable', () => {
   const L = topLayout({ lines: [{ left: ['gear'], right: [] }], hidden: ['divider', 'divider2'] });

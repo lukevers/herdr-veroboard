@@ -26,7 +26,7 @@ command -v node >/dev/null 2>&1 || { echo "Node.js is required (node not found):
 [ -d "$APP" ] || { echo "Herdr's home ($APP) not found. Install and open the Herdr app first." >&2; exit 1; }
 
 # The Herdr files: package path → installed path (relative to veroboard/ and $APP).
-ITEMS=(layouts/veroboard.json mods/veroboard mods/veroboard-menu mods/veroboard-toast)
+ITEMS=(layouts/veroboard.json mods/veroboard mods/veroboard-menu mods/veroboard-toast mods/veroboard-decisions)
 # Files only on your side (Herdr adds gpui-kit.d.ts and jsconfig.json to mod folders) don't count.
 differs() { [ -e "$APP/$1" ] || return 1; local out; out="$(diff -rq "veroboard/$1" "$APP/$1" 2>&1 | grep -v "^Only in $APP/" || true)"; [ -n "$out" ]; }
 conflicts=()

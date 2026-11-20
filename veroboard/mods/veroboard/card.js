@@ -8,7 +8,7 @@ import { h_flex, v_flex } from "gpui-base";
 // The board's display settings (Veroboard settings → Display; user, 2026-11-17): the package's defaults.json "board"
 // section, then yours from ~/.config/veroboard/config.json. Theme colors stay the theme's. Every copy loads them
 // (loadView) and reloads when the folder changes. These fallbacks match the package defaults.
-const VIEW_DEFAULTS = { cables: true, cablesThroughCards: 5, contextRamp: [50, 85], stuckTask: 15, stuckShell: 15, stuckMonitor: 30, waitTask: true, waitShell: true, waitMonitor: true, waitHelper: true, glow: true, greyWhenSeen: true, doneTimer: true, activeRing: true, card: null, top: null, toastPlace: "top-right", toastArea: "board", noticeRead: "visit", cableColors: "rainbow" };
+const VIEW_DEFAULTS = { cables: true, cablesThroughCards: 5, contextRamp: [50, 85], stuckTask: 15, stuckShell: 15, stuckMonitor: 30, waitTask: true, waitShell: true, waitMonitor: true, waitHelper: true, decisionBlocks: true, decisionToast: true, decisionSound: false, decisionOrder: "oldest", decisionDiffOpen: true, glow: true, greyWhenSeen: true, doneTimer: true, activeRing: true, card: null, top: null, toastPlace: "top-right", toastArea: "board", noticeRead: "visit", cableColors: "rainbow" };
 // Where the board's notifications pop up (Veroboard settings → Notifications): over the board or over the terminal
 // (toastArea: "board" or "terminal"), then a row and a column of that area, 3 × 3 (toastPlace).
 const TOAST_PLACES = ["top-left", "top-center", "top-right", "middle-left", "middle-center", "middle-right", "bottom-left", "bottom-center", "bottom-right"];
@@ -155,6 +155,7 @@ const CARD_ITEMS = [
   { id: "why", label: "Blocked reason", help: "Why it's in Blocked (You, Prompt, Pinned, or who it waits on) and for how long. Hover it for the rule." },
   { id: "launched", label: "Agents it opened", help: "How many agents it opened that are still running." },
   { id: "address", label: "Terminal id", help: "Its Herdr terminal id (t21): what hc and other agents call it." },
+  { id: "decisions", label: "Decisions", help: "How many decisions this agent is waiting on you for." },
   // Off by default (user, 2026-11-17): for boards without patch cables. Shown, it goes to the top right corner.
   { id: "openedBy", label: "Opened by", help: "The terminal id of the agent that opened it, if that agent still runs. Handy with patch cables off. Hover it for that agent's name.", home: [0, "right"] },
   { id: "folder", label: "Folder", help: "The last folder of where it runs." },
@@ -167,7 +168,7 @@ const CARD_ITEMS = [
 ];
 const CARD_DEFAULT = {
   lines: [
-    { left: [], right: ["laneTime", "why", "launched", "address"] },
+    { left: [], right: ["laneTime", "why", "launched", "address", "decisions"] },
     { left: ["folder"], right: ["branch"] },
     { left: ["model", "effort", "window"], right: ["space", "context"] },
   ],
@@ -199,7 +200,11 @@ const makeLayout = (c, items, def) => {
   for (const id of [...def.lines.flatMap((l) => [...l.left, ...l.right]), ...ids]) if (ids.includes(id) && !seen.has(id)) {
     seen.add(id);
     if (def.hidden.includes(id)) { hidden.push(id); continue; }
-    const [n, side] = homeOf(items, def, id); lines[n][side].push(id);
+    // Right after the item it follows in the default, when that one is placed on the same side (a new item lands
+    // where it ships, not at the end: Decisions beside the bell; user, 2026-11-20); else at the end.
+    const [n, side] = homeOf(items, def, id), list = lines[n][side], d = def.lines[n]?.[side] ?? [];
+    const after = d.slice(0, Math.max(0, d.indexOf(id))).reverse().map((x) => list.indexOf(x)).find((j) => j >= 0);
+    list.splice(after === undefined ? list.length : after + 1, 0, id);
   }
   return { lines, hidden };
 };
@@ -226,11 +231,12 @@ const TOP_ITEMS = [
   { id: "gear", label: "Settings", help: "Opens these settings. It can be moved, not hidden.", locked: true },
   { id: "filter", label: "Filter box", help: "Filters the board by session name (⌘F)." },
   { id: "bell", label: "Notifications", help: "A bell with what Herdr notified you about, newest first. The pill counts the new ones." },
+  { id: "decisions", label: "Decisions", help: "Opens the decision queue: what agents asked you to decide, with the exact text. The pill counts them." },
 ];
 const TOP_DEFAULT = {
   // The user's own arrangement (2026-11-18): settings, the bell and the filter first, then the spaces; count and pie on
   // the right; the second divider hidden.
-  lines: [{ left: ["gear", "bell", "filter", "divider", "spaces", "newSpace"], right: ["count", "pie"] }],
+  lines: [{ left: ["gear", "bell", "decisions", "filter", "divider", "spaces", "newSpace"], right: ["count", "pie"] }],
   hidden: [],
 };
 // Dividers you add (user, 2026-11-18): "divider" ships with the bar; the editor's + Divider adds divider2, divider3, …
@@ -272,6 +278,8 @@ const renderCard = (m, t, o = {}) => {
     launched: () => m.launched > 0 && badge(t).bg(alpha(t.accent, "26")).text_color(t.accent)
       .child(svg("mods/veroboard/launched.svg").size(10).flex_none()).child(String(m.launched)),
     address: () => badge(t).text_color(t.muted).child(m.address),
+    decisions: () => m.decisions > 0 && badge(t).bg(alpha(t.blocked, "26")).text_color(t.blocked)
+      .child(svg("mods/veroboard/question.svg").size(10).flex_none()).child(String(m.decisions)),
     openedBy: () => m.openedBy && badge(t).text_color(t.muted)
       .when(!o.pick && Boolean(m.openedByName), (el) => el.id(`by-${m.address}`).tooltip(`Opened by ${m.openedBy} (${m.openedByName})`))
       .child(svg("mods/veroboard/launched-by.svg").size(10).flex_none()).child(m.openedBy),

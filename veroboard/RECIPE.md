@@ -70,7 +70,16 @@ Top to bottom:
 - **Mod `veroboard`**: `main.js` (every role, data loading, lanes, cables), `card.js` (one card from a model, its badge
   layout), `topbar.js` (header items), `cables.js` (cable drawing), `settings.js` (the dialog: opened with
   `mod.open veroboard`, shown when there's an `overlay` prop and no role), `names.js` (tab names).
-- **Mod `veroboard-menu`**: the right-click popup.
+- **Mod `veroboard-menu`**: the right-click popup. A card with decisions lists each one under a divider; a click opens
+  the Decisions dialog on it (shared `veroboard.decisionFocus`).
+- **Mod `veroboard-decisions`**: the Decisions dialog (`place: "none"`; the top bar's ? opens it with `openOverlay` at
+  75% of the window). It reads `agent/core/decide.js list --all` and watches `~/.config/veroboard/state/decisions/`.
+  A tab per decision (`short`: ticket, PR or id), then the thread as chat bubbles: the proposal (Preview | Raw; ```` ``` ````
+  blocks in Herdr's editor with syntax colors, ```` ```markdown ```` rendered nested, `---` splits sections), a
+  `--before` diff ("Changes to the current text", open per `board.decisionDiffOpen`), each "updated the proposal"
+  with a ▾ diff from the version before, your questions on the right, and the outcome. The composer: one button per
+  option plus Ask (⌘Enter); an answer or question goes to the agent with `hc send`. Open | Archive at the top; the
+  archive keeps the last 200. Tab order is shared `veroboard.decisionOrder`, set by the board from `board.decisionOrder`.
 - **Mod `veroboard-toast`**: the layout's `"toast"` (herdr-app#364), so Herdr hands it every notification. It puts each
   one in shared `veroboard.notices` (shown in the board's top-right corner, or where `board.toastPlace` says; light accent border, newest nearest the edge, at
   most 3; a click runs its action, × dismisses, it times out) and `veroboard.noticeLog` (the last 50), then closes

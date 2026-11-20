@@ -9,7 +9,7 @@
 
 import { View, div, svg } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
-import { run, props, closeOverlay, theme, shared, setShared } from "herdr";
+import { run, props, closeOverlay, openOverlay, theme, shared, setShared } from "herdr";
 
 const alpha = (hex, aa) => (/^#[0-9a-fA-F]{6}$/.test(hex) ? hex + aa : hex);
 
@@ -29,7 +29,18 @@ function items(p) {
       setShared("veroboard.dismissed", { ...(shared("veroboard.dismissed") ?? {}), [addr]: { at: Date.now() } });
     }]] : []),
     ["Open", "terminal", () => run("agent.focus", { terminal: addr })],
+    // Its open decisions (props.decisions, from the board; user, 2026-11-20): each opens the Decisions dialog on that one.
+    ...(Array.isArray(p?.decisions) ? p.decisions : []).map((d) => [d.title, "mods/veroboard/question.svg", () => openDecision(d.key), d]),
   ];
+}
+// The dialog picks up shared "veroboard.decisionFocus" when it opens. Sized like the top bar's ? opens it: 75% of the
+// window each way, or its mod.json's 852×760 before the window has drawn.
+function openDecision(key) {
+  setShared("veroboard.decisionFocus", key);
+  let vp = null;
+  try { vp = globalThis.window.viewport_size(); } catch (_) { /* not drawn yet */ }
+  openOverlay({ mod: "veroboard-decisions", kind: "dialog",
+    width: vp ? Math.round(vp.width * 0.75) : 852, height: vp ? Math.round(vp.height * 0.75) : 760 });
 }
 
 export default class BoardMenu extends View {
@@ -49,6 +60,8 @@ export default class BoardMenu extends View {
   render() {
     const t = theme();
     const list = items(props());
+    // A divider above the first decision item, only when there is one.
+    const firstDecision = list.findIndex((it) => it[3]);
     return v_flex()
       .id("veroboard-menu")
       .track_focus(this.handle)
@@ -65,7 +78,8 @@ export default class BoardMenu extends View {
         else return;
         cx.notify();
       })
-      .children(list.map((it, i) => h_flex()
+      .children(list.flatMap((it, i) => [...(i === firstDecision ? [div().h(9).flex_none().flex().items_center().px(6)
+        .child(div().h(1).w_full().bg(t.border))] : []), h_flex()
         .id(`bm-${i}`)
         .h(31)
         .px(8)
@@ -78,7 +92,10 @@ export default class BoardMenu extends View {
         .when(i === this.at, el => el.bg(alpha(t.accent, "26")))
         .hover(s => s.bg(alpha(t.accent, "1a")))
         .on_click(() => this.choose(i))
-        .child(svg(`mods/veroboard/icons/${it[1]}.svg`).size(14).flex_none().text_color(t.muted))
-        .child(div().flex_1().child(it[0]))));
+        .child(svg(it[1].includes("/") ? it[1] : `mods/veroboard/icons/${it[1]}.svg`).size(14).flex_none()
+          // A decision waiting on you gets the Blocked pink icon; one waiting on the agent stays muted.
+          .text_color(it[3]?.waiting ? t.blocked : t.muted))
+        // One line, cut with … like the other items; the whole title on hover.
+        .child(div().flex_1().min_w(0).truncate().when(Boolean(it[3]), (el) => el.tooltip(it[0])).child(it[0]))]));
   }
 }

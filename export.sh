@@ -9,7 +9,7 @@ APP="${HERDR_APP_HOME:-$HOME/.config/herdr-app}"
 rm -rf veroboard/layouts veroboard/mods veroboard/keys.json
 mkdir -p veroboard/layouts veroboard/mods
 cp "$APP/layouts/veroboard.json" veroboard/layouts/
-for m in veroboard veroboard-menu veroboard-toast; do
+for m in veroboard veroboard-menu veroboard-toast veroboard-decisions; do
   rsync -a --exclude gpui-kit.d.ts --exclude jsconfig.json --exclude '*.bak-*' "$APP/mods/$m/" "veroboard/mods/$m/"
 done
 node -e '

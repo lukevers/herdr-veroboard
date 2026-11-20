@@ -10,6 +10,8 @@
 const SCRIPTS = {
   tap: "adapters/claude/tap.js", subagents: "adapters/claude/subagents.js", ping: "adapters/claude/ping.sh",
   guard: "core/launch-guard.sh", codex: "adapters/codex/hook.js",
+  // The decision rules, added to every Herdr session's context at its start (user, 2026-11-20).
+  decisions: "core/decisions-context.js",
 };
 const ours = (cmd, script) => typeof cmd === "string" && cmd.includes(script) && /veroboard\//.test(cmd);
 const esc = (s) => s.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");
@@ -89,11 +91,12 @@ const dropHooks = (hooks, scripts) => {
 // ---------- Claude Code: ~/.claude/settings.json ----------
 // The status line feeds the board (model, context, tokens, why it's blocked) and runs yours after "--"; the sub-agent
 // status line gives the sub-agent rows; Stop and Notification ping the card (its glow, the Blocked and Done clocks);
-// the launch guard keeps agents an agent opens in its own space.
-const CLAUDE_HOOKS = [["PreToolUse", "guard", "Bash"], ["Stop", "ping"], ["Notification", "ping"]];
+// the launch guard keeps agents an agent opens in its own space; SessionStart teaches it the decision queue.
+// [event, script, matcher, label]
+const CLAUDE_HOOKS = [["PreToolUse", "guard", "Bash"], ["Stop", "ping"], ["Notification", "ping"], ["SessionStart", "decisions", undefined, "Decision rules"]];
 const claudeCommands = (root) => ({
   tap: `node ${root}/${SCRIPTS.tap} --`, subagents: `node ${root}/${SCRIPTS.subagents}`,
-  ping: `sh ${root}/${SCRIPTS.ping}`, guard: `sh ${root}/${SCRIPTS.guard} claude`,
+  ping: `sh ${root}/${SCRIPTS.ping}`, guard: `sh ${root}/${SCRIPTS.guard} claude`, decisions: `node ${root}/${SCRIPTS.decisions} claude`,
 });
 // What runs after "--" in our status line: your own status line, or "". Every layer of ours is peeled off, so a status
 // line wrapped twice by mistake (ours -- ours -- yours) comes back as one (user, 2026-11-18: never "tap -- tap -- …").
@@ -108,7 +111,7 @@ const claudeStatus = (text, root) => {
   const pieces = [
     { key: "statusLine", label: "Status line", state: pieceState(s.statusLine?.command, SCRIPTS.tap, root) },
     { key: "subagentStatusLine", label: "Sub-agent status line", state: pieceState(s.subagentStatusLine?.command, SCRIPTS.subagents, root) },
-    ...CLAUDE_HOOKS.map(([event, script]) => ({ key: event, label: `${event} hook`, state: hookState(s.hooks, event, SCRIPTS[script], root) })),
+    ...CLAUDE_HOOKS.map(([event, script, , label]) => ({ key: event, label: label ?? `${event} hook`, state: hookState(s.hooks, event, SCRIPTS[script], root) })),
   ];
   // A status line of your own (foreign) means the board's isn't there yet: connecting wraps yours.
   for (const p of pieces) if (p.key === "statusLine" && p.state === "foreign") p.state = "missing";
@@ -145,7 +148,7 @@ const claudeDisconnect = (text) => {
   }
   if (ours(s.subagentStatusLine?.command, SCRIPTS.subagents)) { delete s.subagentStatusLine; changes.push("subagentStatusLine: removed"); }
   if (s.hooks && typeof s.hooks === "object") {
-    for (const e of dropHooks(s.hooks, [SCRIPTS.guard, SCRIPTS.ping])) changes.push(`${e}: removed the board's hook`);
+    for (const e of dropHooks(s.hooks, [SCRIPTS.guard, SCRIPTS.ping, SCRIPTS.decisions])) changes.push(`${e}: removed the board's hook`);
     if (!Object.keys(s.hooks).length) delete s.hooks;
   }
   return { text: dump(s), changes };
@@ -153,12 +156,15 @@ const claudeDisconnect = (text) => {
 
 // ---------- Codex: ~/.codex/hooks.json, and hooks switched on in ~/.codex/config.toml ----------
 const CODEX_EVENTS = ["SessionStart", "UserPromptSubmit", "PostToolUse", "PermissionRequest", "Stop", "Interrupt"];
-const codexCommands = (root) => ({ codex: `node ${root}/${SCRIPTS.codex}`, guard: `sh ${root}/${SCRIPTS.guard} codex` });
+const codexCommands = (root) => ({ codex: `node ${root}/${SCRIPTS.codex}`, guard: `sh ${root}/${SCRIPTS.guard} codex`,
+  decisions: `node ${root}/${SCRIPTS.decisions} codex` });
 const codexStatus = (text, root) => {
   const h = parse(text).hooks;
   return summarize([
     ...CODEX_EVENTS.map((e) => ({ key: e, label: `${e} hook`, state: hookState(h, e, SCRIPTS.codex, root) })),
     { key: "PreToolUse", label: "PreToolUse hook", state: hookState(h, "PreToolUse", SCRIPTS.guard, root) },
+    // Its own SessionStart hook, beside the board's silent one: this one prints the rules for the session's context.
+    { key: "decisions", label: "Decision rules", state: hookState(h, "SessionStart", SCRIPTS.decisions, root) },
   ]);
 };
 const codexConnect = (text, root) => {
@@ -166,11 +172,12 @@ const codexConnect = (text, root) => {
   s.hooks = s.hooks && typeof s.hooks === "object" ? s.hooks : {};
   for (const e of CODEX_EVENTS) { const d = putHook(s.hooks, e, SCRIPTS.codex, c.codex, undefined, root); if (d) changes.push(d); }
   const d = putHook(s.hooks, "PreToolUse", SCRIPTS.guard, c.guard, "Bash", root); if (d) changes.push(d);
+  const r = putHook(s.hooks, "SessionStart", SCRIPTS.decisions, c.decisions, undefined, root); if (r) changes.push(r);
   return { text: dump(s), changes };
 };
 const codexDisconnect = (text) => {
   const s = clone(parse(text)), changes = [];
-  if (s.hooks && typeof s.hooks === "object") for (const e of dropHooks(s.hooks, [SCRIPTS.codex, SCRIPTS.guard])) changes.push(`${e}: removed the board's hook`);
+  if (s.hooks && typeof s.hooks === "object") for (const e of dropHooks(s.hooks, [SCRIPTS.codex, SCRIPTS.guard, SCRIPTS.decisions])) changes.push(`${e}: removed the board's hook`);
   return { text: dump(s), changes };
 };
 // Codex runs hooks only with [features] hooks = true in its config.toml.
